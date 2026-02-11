@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned - High Priority
+- **30-day workout history sensor** - Store last 30 days of workouts with full exercise/set detail to enable calendar UI and historical analysis
+  - Current limitation: Integration only exposes last workout
+  - Required for: 30-day rolling calendar view, clickable workout days, workout receipt popups
+  - Backend change needed: Fetch and store 30-day history as sensor attributes
 - **Exercise template catalog caching** - Cache exercise templates locally and enrich sensors with muscle group and equipment data
 - **Muscle group summary sensor** - Track which muscle groups were hit in last workout and which are due (enables LLM analysis)
 - **Workout notes in attributes** - Surface existing API notes field for per-exercise context
