@@ -38,6 +38,9 @@ You should see:
 - `sensor.hevy_last_workout_summary`
 - `sensor.hevy_weekly_workout_count`
 - `sensor.hevy_current_streak`
+- `sensor.hevy_muscle_group_summary`
+- `sensor.hevy_weekly_muscle_volume`
+- `sensor.hevy_next_workout`
 - `binary_sensor.hevy_worked_out_today`
 - `binary_sensor.hevy_worked_out_this_week`
 - Plus individual exercise sensors
@@ -141,12 +144,14 @@ logger:
 
 ```
 custom_components/hevy/
-├── __init__.py           # Integration setup & platform forwarding
+├── __init__.py           # Integration setup, platform forwarding, service registration
 ├── api.py                # Hevy API client (async, error handling)
 ├── config_flow.py        # UI config flow for API key
-├── const.py              # Constants (domain, URLs, defaults)
-├── coordinator.py        # DataUpdateCoordinator (polling, data processing)
-├── sensor.py             # All sensor entity definitions
+├── const.py              # Constants (domain, URLs, defaults, thresholds)
+├── coordinator.py        # DataUpdateCoordinator (polling, data processing, aggregation)
+├── sensor.py             # All sensor entity definitions (summary, exercise, muscle, volume, routine)
+├── services.py           # Service call handlers (workout history)
+├── services.yaml         # Service schema for HA UI
 ├── manifest.json         # Integration metadata for HA/HACS
 ├── strings.json          # UI strings for config flow
 └── translations/
@@ -162,15 +167,27 @@ custom_components/hevy/
 
 ### Coordinator (`coordinator.py`)
 - Fetches data every N minutes (configurable)
+- 30-day workout history via paginated API calls
 - Processes workouts (weight conversion, PRs, streaks)
 - Calculates metrics (volume, duration, best sets)
-- Maintains workout history
+- Muscle group aggregation (days since last trained, muscles due)
+- Weekly volume per muscle group (primary only, excludes warmups)
+- Routine rotation detection via `routine_id` matching
+- Caches exercise templates and routines on startup
 
 ### Sensors (`sensor.py`)
 - Summary sensors (static)
+- Muscle group summary sensor (primary/secondary groups, muscles due)
+- Weekly muscle volume sensor (volume per group with exercise breakdown)
+- Next workout sensor (routine rotation with exercises preview)
 - Binary sensors (worked out today/week)
 - Exercise sensors (dynamic, created per exercise)
 - Rich attributes with set-level detail
+
+### Services (`services.py`)
+- `hevy.get_workout_history` - enriched workout history for 1-90 days
+- Uses `SupportsResponse.ONLY` pattern for response-only service calls
+- Returns summary stats + full workout/exercise/set detail
 
 ### Config Flow (`config_flow.py`)
 - User step: API key entry + validation
@@ -219,6 +236,16 @@ This supports A-B-C rotation training (e.g., lift, rest, lift, rest, lift).
 - [ ] Device info groups entities
 - [ ] Update interval configurable
 - [ ] Errors handled gracefully
+- [ ] Muscle group summary shows primary/secondary groups from last workout
+- [ ] `muscles_due` lists groups not trained in 3+ days
+- [ ] Weekly muscle volume excludes warmup sets and bodyweight exercises
+- [ ] Volume assigned to primary muscle group only (no double-counting)
+- [ ] Next workout shows correct routine rotation
+- [ ] `exercises_preview` lists exercises for the upcoming routine
+- [ ] `hevy.get_workout_history` service returns enriched data via Developer Tools
+- [ ] 30-day pagination stops at date cutoff or page cap
+- [ ] Routine cache populates on startup (check logs)
+- [ ] Graceful degradation if routines fetch fails
 
 ## Release Process
 

@@ -1,7 +1,7 @@
 """Data Update Coordinator for Hevy integration."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any
 
@@ -9,7 +9,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import HevyApiClient, HevyApiError
-from .const import DOMAIN, KG_TO_LBS, UNIT_SYSTEM_IMPERIAL, UNIT_SYSTEM_METRIC
+from .const import (
+    DOMAIN,
+    KG_TO_LBS,
+    MAX_WORKOUT_PAGES,
+    MUSCLE_DUE_THRESHOLD_DAYS,
+    UNIT_SYSTEM_IMPERIAL,
+    UNIT_SYSTEM_METRIC,
+    WORKOUT_HISTORY_DAYS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,6 +51,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._workout_history: list[dict[str, Any]] = []
         self._exercise_prs: dict[str, dict[str, Any]] = {}
         self._exercise_templates: dict[str, dict] = {}  # Cache templates by ID
+        self._routines: list[dict[str, Any]] = []
 
     async def fetch_exercise_templates(self) -> None:
         """Fetch and cache exercise template catalog from all pages."""
@@ -83,6 +92,321 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         except Exception as err:
             _LOGGER.warning("Failed to fetch exercise templates: %s", err)
+
+    async def fetch_routines(self) -> None:
+        """Fetch and cache routines from the API."""
+        try:
+            data = await self.client.get_routines()
+            routines = data.get("routines", [])
+            self._routines = []
+            for routine in routines:
+                routine_id = routine.get("id")
+                if routine_id:
+                    exercises = []
+                    for exercise in routine.get("exercises", []):
+                        title = exercise.get("title")
+                        if title:
+                            exercises.append(title)
+                    self._routines.append({
+                        "id": routine_id,
+                        "title": routine.get("title", "Untitled"),
+                        "exercises": exercises,
+                    })
+            _LOGGER.info("Cached %d routines", len(self._routines))
+        except Exception as err:
+            _LOGGER.warning("Failed to fetch routines: %s", err)
+
+    async def _fetch_30_day_workouts(self) -> list[dict[str, Any]]:
+        """Fetch up to 30 days of workout history with pagination.
+
+        Returns:
+            List of workout dicts covering the last 30 days
+        """
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=WORKOUT_HISTORY_DAYS)
+        all_workouts: list[dict[str, Any]] = []
+
+        for page in range(1, MAX_WORKOUT_PAGES + 1):
+            data = await self.client.get_workouts(page=page, page_size=10)
+            workouts = data.get("workouts", [])
+
+            if not workouts:
+                break
+
+            reached_cutoff = False
+            for workout in workouts:
+                start_time = workout.get("start_time")
+                if start_time:
+                    try:
+                        workout_dt = datetime.fromisoformat(
+                            start_time.replace("Z", "+00:00")
+                        )
+                        if workout_dt < cutoff:
+                            reached_cutoff = True
+                            break
+                    except (ValueError, AttributeError):
+                        pass
+                all_workouts.append(workout)
+
+            if reached_cutoff:
+                break
+
+            # Check if there are more pages
+            page_count = data.get("page_count", 1)
+            if page >= page_count:
+                break
+
+        return all_workouts
+
+    def _detect_next_workout(self) -> dict[str, Any]:
+        """Detect the next workout in the routine rotation.
+
+        Returns:
+            Dict with next routine info and rotation position
+        """
+        if not self._routines:
+            return {
+                "next_routine": "No routines configured",
+                "routine_id": None,
+                "routine_title": "No routines configured",
+                "last_workout_title": None,
+                "last_workout_routine_id": None,
+                "rotation_position": None,
+                "rotation_total": 0,
+                "exercises_preview": [],
+            }
+
+        last_workout = self._workout_history[0] if self._workout_history else None
+        if not last_workout:
+            # No workouts, suggest first routine
+            first = self._routines[0]
+            return {
+                "next_routine": first["title"],
+                "routine_id": first["id"],
+                "routine_title": first["title"],
+                "last_workout_title": None,
+                "last_workout_routine_id": None,
+                "rotation_position": 1,
+                "rotation_total": len(self._routines),
+                "exercises_preview": first["exercises"],
+            }
+
+        last_routine_id = last_workout.get("routine_id")
+        last_title = last_workout.get("title")
+
+        # Try to find the last workout's routine by routine_id
+        found_index = None
+        if last_routine_id:
+            for i, routine in enumerate(self._routines):
+                if routine["id"] == last_routine_id:
+                    found_index = i
+                    break
+
+        if found_index is None:
+            return {
+                "next_routine": "No routine detected for last workout",
+                "routine_id": None,
+                "routine_title": "No routine detected for last workout",
+                "last_workout_title": last_title,
+                "last_workout_routine_id": last_routine_id,
+                "rotation_position": None,
+                "rotation_total": len(self._routines),
+                "exercises_preview": [],
+            }
+
+        next_index = (found_index + 1) % len(self._routines)
+        next_routine = self._routines[next_index]
+
+        return {
+            "next_routine": next_routine["title"],
+            "routine_id": next_routine["id"],
+            "routine_title": next_routine["title"],
+            "last_workout_title": last_title,
+            "last_workout_routine_id": last_routine_id,
+            "rotation_position": next_index + 1,
+            "rotation_total": len(self._routines),
+            "exercises_preview": next_routine["exercises"],
+        }
+
+    def _aggregate_muscle_groups(self) -> dict[str, Any]:
+        """Aggregate muscle group data from workout history.
+
+        Returns:
+            Dict with muscle group tracking data
+        """
+        now = datetime.now(tz=timezone.utc)
+        muscle_last_trained: dict[str, datetime] = {}
+        last_workout_primary: list[str] = []
+        last_workout_secondary: list[str] = []
+        last_workout_date = None
+
+        # Process all workouts for days_since_last tracking
+        for workout in self._workout_history:
+            start_time = workout.get("start_time")
+            if not start_time:
+                continue
+            try:
+                workout_dt = datetime.fromisoformat(
+                    start_time.replace("Z", "+00:00")
+                )
+            except (ValueError, AttributeError):
+                continue
+
+            for exercise in workout.get("exercises", []):
+                template_id = exercise.get("exercise_template_id")
+                if not template_id or template_id not in self._exercise_templates:
+                    continue
+
+                template = self._exercise_templates[template_id]
+                primary = template.get("muscle_group")
+                secondaries = template.get("secondary_muscle_groups", [])
+
+                if primary:
+                    if primary not in muscle_last_trained or workout_dt > muscle_last_trained[primary]:
+                        muscle_last_trained[primary] = workout_dt
+                for sec in secondaries:
+                    if sec not in muscle_last_trained or workout_dt > muscle_last_trained[sec]:
+                        muscle_last_trained[sec] = workout_dt
+
+        # Process last workout specifically for primary/secondary groups
+        if self._workout_history:
+            last_workout = self._workout_history[0]
+            last_workout_date = last_workout.get("start_time")
+            seen_primary = set()
+            seen_secondary = set()
+
+            for exercise in last_workout.get("exercises", []):
+                template_id = exercise.get("exercise_template_id")
+                if not template_id or template_id not in self._exercise_templates:
+                    continue
+
+                template = self._exercise_templates[template_id]
+                primary = template.get("muscle_group")
+                secondaries = template.get("secondary_muscle_groups", [])
+
+                if primary and primary not in seen_primary:
+                    last_workout_primary.append(primary)
+                    seen_primary.add(primary)
+                for sec in secondaries:
+                    if sec not in seen_secondary:
+                        last_workout_secondary.append(sec)
+                        seen_secondary.add(sec)
+
+        # Calculate days since last trained
+        days_since_last: dict[str, int] = {}
+        muscles_due: list[str] = []
+        for group, last_dt in muscle_last_trained.items():
+            days = (now - last_dt).days
+            days_since_last[group] = days
+            if days >= MUSCLE_DUE_THRESHOLD_DAYS:
+                muscles_due.append(group)
+
+        return {
+            "last_workout_primary_groups": last_workout_primary,
+            "last_workout_secondary_groups": last_workout_secondary,
+            "last_workout_date": last_workout_date,
+            "days_since_last": days_since_last,
+            "muscles_due": sorted(muscles_due),
+        }
+
+    def _calculate_weekly_muscle_volume(self) -> dict[str, Any]:
+        """Calculate volume per muscle group for the last 7 days.
+
+        Returns:
+            Dict with volume data per muscle group
+        """
+        now = datetime.now(tz=timezone.utc)
+        week_ago = now - timedelta(days=7)
+
+        volume_by_group: dict[str, float] = {}
+        exercise_breakdown: dict[str, list[dict[str, Any]]] = {}
+        total_volume = 0.0
+        total_sets = 0
+        total_workouts = 0
+
+        for workout in self._workout_history:
+            start_time = workout.get("start_time")
+            if not start_time:
+                continue
+            try:
+                workout_dt = datetime.fromisoformat(
+                    start_time.replace("Z", "+00:00")
+                )
+            except (ValueError, AttributeError):
+                continue
+
+            if workout_dt < week_ago:
+                continue
+
+            total_workouts += 1
+
+            for exercise in workout.get("exercises", []):
+                template_id = exercise.get("exercise_template_id")
+                if not template_id or template_id not in self._exercise_templates:
+                    continue
+
+                template = self._exercise_templates[template_id]
+                muscle_group = template.get("muscle_group")
+                if not muscle_group:
+                    continue
+
+                exercise_title = exercise.get("title", "Unknown")
+                exercise_volume = 0.0
+                exercise_sets = 0
+
+                for set_data in exercise.get("sets", []):
+                    # Skip warmup sets
+                    set_type = set_data.get("type", "normal")
+                    if set_type not in ("normal", "dropset", "failure"):
+                        continue
+
+                    weight_kg = set_data.get("weight_kg")
+                    reps = set_data.get("reps")
+
+                    # Skip bodyweight/timed exercises (no weight)
+                    if weight_kg is None or reps is None:
+                        continue
+
+                    weight = self._convert_weight(weight_kg)
+                    if weight:
+                        set_volume = weight * reps
+                        exercise_volume += set_volume
+                        exercise_sets += 1
+
+                if exercise_volume > 0:
+                    volume_by_group[muscle_group] = volume_by_group.get(muscle_group, 0) + exercise_volume
+                    total_volume += exercise_volume
+                    total_sets += exercise_sets
+
+                    if muscle_group not in exercise_breakdown:
+                        exercise_breakdown[muscle_group] = []
+
+                    # Check if exercise already in breakdown for this group
+                    found = False
+                    for entry in exercise_breakdown[muscle_group]:
+                        if entry["exercise"] == exercise_title:
+                            entry["volume"] = round(entry["volume"] + exercise_volume, 1)
+                            entry["sets"] += exercise_sets
+                            found = True
+                            break
+                    if not found:
+                        exercise_breakdown[muscle_group].append({
+                            "exercise": exercise_title,
+                            "volume": round(exercise_volume, 1),
+                            "sets": exercise_sets,
+                        })
+
+        # Round volume values
+        rounded_groups = {k: round(v, 1) for k, v in volume_by_group.items()}
+
+        return {
+            "total_volume": round(total_volume, 1),
+            "period_start": (now - timedelta(days=7)).isoformat(),
+            "period_end": now.isoformat(),
+            "total_sets": total_sets,
+            "total_workouts": total_workouts,
+            "muscle_groups": rounded_groups,
+            "exercise_breakdown": exercise_breakdown,
+        }
 
     def _convert_weight(self, weight_kg: float | None) -> float | None:
         """Convert weight based on unit system.
@@ -297,12 +621,11 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Fetch workout count
             workout_count = await self.client.get_workout_count()
 
-            # Fetch recent workouts with full details (API limit: pageSize <= 10)
-            workouts_data = await self.client.get_workouts(page=1, page_size=10)
-            workouts = workouts_data.get("workouts", [])
+            # Fetch 30-day workout history with pagination
+            workouts = await self._fetch_30_day_workouts()
 
-            # Update workout history (keep last 10)
-            self._workout_history = workouts[:10]
+            # Update workout history (full 30-day window)
+            self._workout_history = workouts
 
             # Update PRs from all fetched workouts
             self._update_exercise_prs(self._workout_history)
@@ -485,6 +808,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "current_streak": self._calculate_current_streak(workouts),
                 "exercise_data": exercise_data,
                 "workouts": workouts,
+                "routine_data": self._detect_next_workout(),
+                "muscle_group_data": self._aggregate_muscle_groups(),
+                "weekly_muscle_volume": self._calculate_weekly_muscle_volume(),
             }
 
         except HevyApiError as err:

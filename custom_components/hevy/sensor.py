@@ -26,6 +26,9 @@ from .const import (
     SENSOR_CURRENT_STREAK,
     SENSOR_LAST_WORKOUT_DATE,
     SENSOR_LAST_WORKOUT_SUMMARY,
+    SENSOR_MUSCLE_GROUP_SUMMARY,
+    SENSOR_NEXT_WORKOUT,
+    SENSOR_WEEKLY_MUSCLE_VOLUME,
     SENSOR_WEEKLY_WORKOUT_COUNT,
     SENSOR_WORKOUT_COUNT,
 )
@@ -57,6 +60,9 @@ async def async_setup_entry(
         HevyCurrentStreakSensor(coordinator, entry),
         HevyWorkedOutTodayBinarySensor(coordinator, entry),
         HevyWorkedOutThisWeekBinarySensor(coordinator, entry),
+        HevyMuscleGroupSummarySensor(coordinator, entry),
+        HevyWeeklyMuscleVolumeSensor(coordinator, entry),
+        HevyNextWorkoutSensor(coordinator, entry),
     ]
 
     # Create per-exercise sensors dynamically
@@ -448,3 +454,115 @@ class HevyExerciseSensor(CoordinatorEntity[HevyDataUpdateCoordinator], SensorEnt
             attrs["total_duration_seconds"] = exercise_data.get("total_duration_seconds")
 
         return attrs
+
+
+class HevyMuscleGroupSummarySensor(HevyBaseSensor):
+    """Sensor for muscle group tracking summary."""
+
+    _attr_icon = "mdi:arm-flex"
+
+    def __init__(
+        self, coordinator: HevyDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, SENSOR_MUSCLE_GROUP_SUMMARY)
+        self._attr_name = "Muscle group summary"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return comma-separated primary muscle groups from last workout."""
+        if not self.coordinator.data:
+            return None
+        muscle_data = self.coordinator.data.get("muscle_group_data", {})
+        groups = muscle_data.get("last_workout_primary_groups", [])
+        if not groups:
+            return "No data"
+        return ", ".join(groups)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return muscle group tracking attributes."""
+        if not self.coordinator.data:
+            return {}
+        muscle_data = self.coordinator.data.get("muscle_group_data", {})
+        return {
+            "last_workout_primary_groups": muscle_data.get("last_workout_primary_groups", []),
+            "last_workout_secondary_groups": muscle_data.get("last_workout_secondary_groups", []),
+            "last_workout_date": muscle_data.get("last_workout_date"),
+            "days_since_last": muscle_data.get("days_since_last", {}),
+            "muscles_due": muscle_data.get("muscles_due", []),
+        }
+
+
+class HevyWeeklyMuscleVolumeSensor(HevyBaseSensor):
+    """Sensor for weekly volume per muscle group."""
+
+    _attr_icon = "mdi:chart-bar"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: HevyDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, SENSOR_WEEKLY_MUSCLE_VOLUME)
+        self._attr_name = "Weekly muscle volume"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return total volume across all muscle groups for the week."""
+        if not self.coordinator.data:
+            return None
+        volume_data = self.coordinator.data.get("weekly_muscle_volume", {})
+        return volume_data.get("total_volume", 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return volume breakdown attributes."""
+        if not self.coordinator.data:
+            return {}
+        volume_data = self.coordinator.data.get("weekly_muscle_volume", {})
+        return {
+            "period_start": volume_data.get("period_start"),
+            "period_end": volume_data.get("period_end"),
+            "muscle_groups": volume_data.get("muscle_groups", {}),
+            "exercise_breakdown": volume_data.get("exercise_breakdown", {}),
+            "total_sets": volume_data.get("total_sets", 0),
+            "total_workouts": volume_data.get("total_workouts", 0),
+        }
+
+
+class HevyNextWorkoutSensor(HevyBaseSensor):
+    """Sensor for next workout in routine rotation."""
+
+    _attr_icon = "mdi:calendar-arrow-right"
+
+    def __init__(
+        self, coordinator: HevyDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, SENSOR_NEXT_WORKOUT)
+        self._attr_name = "Next workout"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the next routine title."""
+        if not self.coordinator.data:
+            return None
+        routine_data = self.coordinator.data.get("routine_data", {})
+        return routine_data.get("next_routine", "Unknown")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return routine rotation attributes."""
+        if not self.coordinator.data:
+            return {}
+        routine_data = self.coordinator.data.get("routine_data", {})
+        return {
+            "routine_id": routine_data.get("routine_id"),
+            "routine_title": routine_data.get("routine_title"),
+            "last_workout_title": routine_data.get("last_workout_title"),
+            "last_workout_routine_id": routine_data.get("last_workout_routine_id"),
+            "rotation_position": routine_data.get("rotation_position"),
+            "rotation_total": routine_data.get("rotation_total"),
+            "exercises_preview": routine_data.get("exercises_preview", []),
+        }

@@ -31,6 +31,13 @@ SENSOR_WEEKLY_WORKOUT_COUNT = "weekly_workout_count"
 SENSOR_CURRENT_STREAK = "current_streak"
 BINARY_SENSOR_WORKED_OUT_TODAY = "worked_out_today"
 BINARY_SENSOR_WORKED_OUT_THIS_WEEK = "worked_out_this_week"
+SENSOR_MUSCLE_GROUP_SUMMARY = "muscle_group_summary"
+SENSOR_WEEKLY_MUSCLE_VOLUME = "weekly_muscle_volume"
+SENSOR_NEXT_WORKOUT = "next_workout"
+
+MUSCLE_DUE_THRESHOLD_DAYS = 3
+MAX_WORKOUT_PAGES = 10       # Safety cap for pagination
+WORKOUT_HISTORY_DAYS = 30
 
 # API Endpoints
 ENDPOINT_WORKOUTS = "/workouts"

@@ -1,0 +1,21 @@
+get_workout_history:
+  name: Get workout history
+  description: Returns workout history for a specified number of days with full exercise and set detail.
+  fields:
+    days:
+      name: Days
+      description: Number of days of history to return
+      required: false
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 90
+          mode: box
+    config_entry_id:
+      name: Config entry ID
+      description: The Hevy integration config entry ID
+      required: true
+      selector:
+        config_entry:
+          integration: hevy

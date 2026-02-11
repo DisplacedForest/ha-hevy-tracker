@@ -9,7 +9,11 @@ A comprehensive Home Assistant integration for tracking your Hevy workouts with 
 - **Rich Workout Data** - Full set-level detail with weight, reps, and duration tracking
 - **Summary Sensors** - Workout count, streaks, weekly activity
 - **Per-Exercise Tracking** - Individual sensors for each exercise with personal records
+- **Muscle Group Tracking** - Which muscles you hit, which are due, days since last trained
+- **Weekly Volume Analysis** - Volume per muscle group with exercise breakdown
+- **Routine Rotation** - Automatically detects next workout in your A/B/C rotation
 - **Smart Metrics** - Total volume, best sets, and workout duration
+- **30-Day History** - Service call for full workout history with enriched data
 - **Automatic Updates** - Configurable polling interval (5-120 minutes)
 - **Unit Support** - Display in imperial (lbs) or metric (kg)
 
@@ -55,6 +59,9 @@ A comprehensive Home Assistant integration for tracking your Hevy workouts with 
 | `sensor.hevy_last_workout_summary` | Full summary of last workout | Workout title |
 | `sensor.hevy_weekly_workout_count` | Workouts in last 7 days | Integer count |
 | `sensor.hevy_current_streak` | Consecutive workout days | Days (allows 1 rest day) |
+| `sensor.hevy_muscle_group_summary` | Muscle groups from last workout | Comma-separated groups |
+| `sensor.hevy_weekly_muscle_volume` | Total weekly volume across all groups | Volume (lbs or kg) |
+| `sensor.hevy_next_workout` | Next routine in rotation | Routine title |
 
 ### Binary Sensors
 
@@ -83,6 +90,68 @@ Dynamically created for each unique exercise:
 - `exercise_template_id` - Hevy exercise ID
 
 ## Detailed Sensor Attributes
+
+### Muscle Group Summary Attributes
+
+```yaml
+last_workout_primary_groups:
+  - chest
+  - shoulders
+  - quadriceps
+  - biceps
+last_workout_secondary_groups:
+  - triceps
+  - glutes
+  - hamstrings
+last_workout_date: "2026-02-11T16:21:10+00:00"
+days_since_last:
+  chest: 0
+  shoulders: 0
+  quadriceps: 0
+  lats: 2
+  hamstrings: 4
+muscles_due:
+  - hamstrings
+  - glutes
+```
+
+### Weekly Muscle Volume Attributes
+
+```yaml
+period_start: "2026-02-04T16:00:00"
+period_end: "2026-02-11T16:00:00"
+muscle_groups:
+  chest: 1860.0
+  shoulders: 960.0
+  quadriceps: 2025.0
+exercise_breakdown:
+  chest:
+    - exercise: "Bench Press (Dumbbell)"
+      volume: 1860.0
+      sets: 3
+  shoulders:
+    - exercise: "Overhead Press (Dumbbell)"
+      volume: 960.0
+      sets: 3
+total_sets: 45
+total_workouts: 5
+```
+
+### Next Workout Attributes
+
+```yaml
+routine_id: "uuid-of-next-routine"
+routine_title: "Day B - Pull/Hinge Focus"
+last_workout_title: "Day A - Push/Quad Focus"
+last_workout_routine_id: "uuid-of-last-routine"
+rotation_position: 2
+rotation_total: 3
+exercises_preview:
+  - "Barbell Row"
+  - "Romanian Deadlift"
+  - "Pull-up"
+  - "Face Pull"
+```
 
 ### Last Workout Summary Attributes
 
@@ -116,6 +185,34 @@ exercises:
         duration_seconds: 60
     best_set: "1m 00s"
     total_duration_seconds: 60
+```
+
+## Services
+
+### `hevy.get_workout_history`
+
+Returns enriched workout history for a specified number of days. Call via **Developer Tools > Services**.
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `config_entry_id` | Yes | - | The Hevy integration config entry ID |
+| `days` | No | 30 | Number of days of history (1-90) |
+
+**Response includes:**
+- `summary` - Total workouts, total volume, workout days, avg duration, avg volume per workout
+- `workouts` - Array of workouts with full exercise/set detail, muscle groups, and duration
+
+**Example automation using service response:**
+```yaml
+action:
+  - service: hevy.get_workout_history
+    data:
+      config_entry_id: !input config_entry
+      days: 7
+    response_variable: history
+  - service: notify.mobile_app
+    data:
+      message: "This week: {{ history.summary.total_workouts }} workouts, {{ history.summary.total_volume }} lbs total volume"
 ```
 
 ## Configuration Options

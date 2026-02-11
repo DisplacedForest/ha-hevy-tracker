@@ -19,6 +19,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import HevyDataUpdateCoordinator
+from .services import async_register_services, async_unregister_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,8 +51,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = HevyDataUpdateCoordinator(hass, client, update_interval, unit_system)
 
-    # Fetch exercise templates before first data refresh
+    # Fetch exercise templates and routines before first data refresh
     await coordinator.fetch_exercise_templates()
+    await coordinator.fetch_routines()
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
@@ -60,6 +62,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Register services
+    async_register_services(hass)
 
     # Register update listener for options changes
     entry.async_on_unload(entry.add_update_listener(update_listener))
@@ -81,6 +86,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
+        async_unregister_services(hass)
 
     return unload_ok
 
