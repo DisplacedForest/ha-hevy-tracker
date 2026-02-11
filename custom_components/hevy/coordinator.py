@@ -42,6 +42,47 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.unit_system = unit_system
         self._workout_history: list[dict[str, Any]] = []
         self._exercise_prs: dict[str, dict[str, Any]] = {}
+        self._exercise_templates: dict[str, dict] = {}  # Cache templates by ID
+
+    async def fetch_exercise_templates(self) -> None:
+        """Fetch and cache exercise template catalog from all pages."""
+        try:
+            page = 1
+            total_templates = 0
+
+            while True:
+                data = await self.client.get_exercise_templates(page=page, page_size=50)
+                templates = data.get("exercise_templates", [])
+
+                if not templates:
+                    break  # No more templates
+
+                for template in templates:
+                    template_id = template.get("id")
+                    if template_id:
+                        self._exercise_templates[template_id] = {
+                            "title": template.get("title"),
+                            "muscle_group": template.get("primary_muscle_group"),
+                            "secondary_muscle_groups": template.get(
+                                "secondary_muscle_groups", []
+                            ),
+                            "equipment": template.get("equipment"),
+                            "type": template.get("type"),
+                        }
+                        total_templates += 1
+
+                # Check if there are more pages
+                page_count = data.get("page_count", 1)
+                if page >= page_count:
+                    break
+
+                page += 1
+
+            _LOGGER.info(
+                "Cached %d exercise templates from %d pages", total_templates, page
+            )
+        except Exception as err:
+            _LOGGER.warning("Failed to fetch exercise templates: %s", err)
 
     def _convert_weight(self, weight_kg: float | None) -> float | None:
         """Convert weight based on unit system.
@@ -337,6 +378,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "total_duration_seconds": (
                             total_duration if total_duration > 0 else None
                         ),
+                        "notes": exercise.get("notes"),
                     }
                     exercises_summary.append(exercise_summary)
 
@@ -413,6 +455,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "total_reps": total_reps if total_reps > 0 else None,
                             "total_sets": len(sets),
                             "exercise_template_id": template_id,
+                            "notes": exercise.get("notes"),
                             "personal_record_weight": pr_weight,
                             "personal_record_reps": pr_data.get("reps"),
                             "best_set": self._get_best_set_string(sets),

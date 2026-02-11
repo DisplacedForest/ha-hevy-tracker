@@ -5,6 +5,36 @@ All notable changes to the Hevy Workout Tracker integration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-11
+
+### Added
+- **Exercise template enrichment** - All exercise sensors now include muscle group and equipment metadata
+  - `muscle_group` attribute - Primary muscle targeted (chest, shoulders, quadriceps, etc.)
+  - `secondary_muscles` attribute - Secondary muscles worked (e.g., triceps, shoulders for bench press)
+  - `equipment` attribute - Equipment type (barbell, dumbbell, machine, kettlebell, etc.)
+  - `exercise_type` attribute - Exercise type (weight_reps, duration, reps_only, etc.)
+  - 429 exercise templates cached on integration startup
+- **Workout notes** - Exercise notes now exposed in sensor attributes
+  - `notes` attribute added to per-exercise sensors
+  - Notes visible in last workout summary sensor exercises array
+- **API pagination support** - Exercise template API endpoint now supports pagination
+  - Efficiently fetches all templates using page_size=50
+  - Handles multi-page responses automatically
+- **Template caching system** - Exercise templates fetched once on startup and cached in memory
+  - O(1) lookup performance for template enrichment
+  - Graceful degradation if template fetch fails
+  - Logs total templates cached for verification
+
+### Changed
+- Exercise sensors now show richer metadata enabling muscle group tracking
+- Foundation laid for planned muscle group summary sensors
+
+### Technical
+- Added `fetch_exercise_templates()` method to coordinator
+- Template cache stored in `_exercise_templates` dict indexed by template ID
+- Templates fetched before first data refresh in async_setup_entry
+- Test scripts now use `.env` file for API key (security improvement)
+
 ## [0.1.0] - 2026-02-11
 
 ### Added
@@ -56,11 +86,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Current limitation: Integration only exposes last workout
   - Required for: 30-day rolling calendar view, clickable workout days, workout receipt popups
   - Backend change needed: Fetch and store 30-day history as sensor attributes
-- **Exercise template catalog caching** - Cache exercise templates locally and enrich sensors with muscle group and equipment data
 - **Muscle group summary sensor** - Track which muscle groups were hit in last workout and which are due (enables LLM analysis)
-- **Workout notes in attributes** - Surface existing API notes field for per-exercise context
-- **Routine tracking sensors** - Show next workout in A/B/C rotation (e.g., "Day B - Pull/Hinge Focus")
+  - Foundation complete: Template enrichment provides muscle group data
+  - Next step: Create aggregation sensor
 - **Volume per muscle group tracking** - Total chest volume, leg volume, etc. across the week for program balance monitoring
+  - Foundation complete: Template enrichment provides muscle group data
+  - Next step: Calculate volume per muscle group
+- **Routine tracking sensors** - Show next workout in A/B/C rotation (e.g., "Day B - Pull/Hinge Focus")
 - **Webhook support** - Replace polling with webhooks for real-time updates after workouts
 
 ### Planned - Low Priority

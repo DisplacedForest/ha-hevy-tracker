@@ -50,6 +50,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = HevyDataUpdateCoordinator(hass, client, update_interval, unit_system)
 
+    # Fetch exercise templates before first data refresh
+    await coordinator.fetch_exercise_templates()
+
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 

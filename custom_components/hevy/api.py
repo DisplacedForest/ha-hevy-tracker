@@ -151,13 +151,20 @@ class HevyApiClient:
         params = {"page": page, "pageSize": page_size}
         return await self._request("GET", "/workouts/events", params=params)
 
-    async def get_exercise_templates(self) -> dict[str, Any]:
+    async def get_exercise_templates(
+        self, page: int = 1, page_size: int = 10
+    ) -> dict[str, Any]:
         """Get exercise template catalog.
 
+        Args:
+            page: Page number (1-indexed)
+            page_size: Number of templates per page
+
         Returns:
-            Dict with exercise templates
+            Dict with exercise templates and pagination info
         """
-        return await self._request("GET", "/exercise_templates")
+        params = {"page": page, "pageSize": page_size}
+        return await self._request("GET", "/exercise_templates", params=params)
 
     async def get_routines(self) -> dict[str, Any]:
         """Get saved routines.

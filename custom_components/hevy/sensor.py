@@ -419,7 +419,21 @@ class HevyExerciseSensor(CoordinatorEntity[HevyDataUpdateCoordinator], SensorEnt
             "last_workout_sets": exercise_data.get("last_workout_sets", []),
             "total_sets": exercise_data.get("total_sets", 0),
             "exercise_template_id": exercise_data.get("exercise_template_id"),
+            "notes": exercise_data.get("notes"),
         }
+
+        # Enrich with template data if available
+        template_id = exercise_data.get("exercise_template_id")
+        if template_id and template_id in self.coordinator._exercise_templates:
+            template = self.coordinator._exercise_templates[template_id]
+            attrs.update(
+                {
+                    "muscle_group": template.get("muscle_group"),
+                    "secondary_muscles": template.get("secondary_muscle_groups"),
+                    "equipment": template.get("equipment"),
+                    "exercise_type": template.get("type"),
+                }
+            )
 
         # Add weight and reps for weighted exercises
         if exercise_data.get("weight") is not None:
