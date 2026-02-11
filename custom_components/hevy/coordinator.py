@@ -787,6 +787,20 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             ),
                         }
 
+            # Build deduplicated, sorted list of workout dates (YYYY-MM-DD)
+            workout_dates = set()
+            for workout in workouts:
+                start_time = workout.get("start_time")
+                if start_time:
+                    try:
+                        dt = datetime.fromisoformat(
+                            start_time.replace("Z", "+00:00")
+                        )
+                        workout_dates.add(dt.strftime("%Y-%m-%d"))
+                    except (ValueError, AttributeError):
+                        continue
+            workout_dates_sorted = sorted(workout_dates)
+
             return {
                 "workout_count": workout_count,
                 "last_workout": last_workout,
@@ -811,6 +825,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "routine_data": self._detect_next_workout(),
                 "muscle_group_data": self._aggregate_muscle_groups(),
                 "weekly_muscle_volume": self._calculate_weekly_muscle_volume(),
+                "workout_dates": workout_dates_sorted,
             }
 
         except HevyApiError as err:

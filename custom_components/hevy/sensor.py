@@ -210,6 +210,7 @@ class HevyLastWorkoutDateSensor(HevyBaseSensor):
         return {
             "workout_title": self.coordinator.data.get("last_workout_title"),
             "duration_minutes": self.coordinator.data.get("workout_duration_minutes"),
+            "workout_dates": self.coordinator.data.get("workout_dates", []),
         }
 
 
