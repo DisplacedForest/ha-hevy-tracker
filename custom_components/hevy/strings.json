@@ -1,0 +1,33 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Hevy Workout Tracker",
+        "description": "Enter your Hevy API key to connect your workout data to Home Assistant.",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid API key. Please check your key and try again.",
+      "cannot_connect": "Unable to connect to Hevy API. Please check your internet connection and try again.",
+      "unknown": "An unexpected error occurred. Please try again."
+    },
+    "abort": {
+      "already_configured": "This Hevy account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Hevy Options",
+        "description": "Configure update interval and unit preferences.",
+        "data": {
+          "polling_interval": "Polling Interval (minutes)",
+          "unit_system": "Unit System"
+        }
+      }
+    }
+  }
+}
