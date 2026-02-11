@@ -1,11 +1,11 @@
 {
   "domain": "hevy",
   "name": "Hevy Workout Tracker",
-  "codeowners": ["@zachary"],
+  "codeowners": ["@DisplacedForest"],
   "config_flow": true,
-  "documentation": "https://github.com/zachary/hevy-hass",
+  "documentation": "https://github.com/DisplacedForest/hevy_hacs",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/zachary/hevy-hass/issues",
+  "issue_tracker": "https://github.com/DisplacedForest/hevy_hacs/issues",
   "requirements": ["aiohttp>=3.9.0"],
   "version": "0.1.0"
 }
