@@ -801,6 +801,74 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         continue
             workout_dates_sorted = sorted(workout_dates)
 
+            # Build workout_summaries dict keyed by date string
+            workout_summaries: dict[str, dict[str, Any]] = {}
+            for workout in workouts:
+                start_time = workout.get("start_time")
+                end_time = workout.get("end_time")
+                if not start_time:
+                    continue
+                try:
+                    workout_dt = datetime.fromisoformat(
+                        start_time.replace("Z", "+00:00")
+                    )
+                    date_key = workout_dt.strftime("%Y-%m-%d")
+                except (ValueError, AttributeError):
+                    continue
+
+                # Skip if we already have an entry for this date (first = most recent)
+                if date_key in workout_summaries:
+                    continue
+
+                # Calculate duration
+                duration_minutes = None
+                if end_time:
+                    try:
+                        end_dt = datetime.fromisoformat(
+                            end_time.replace("Z", "+00:00")
+                        )
+                        duration_minutes = round(
+                            (end_dt - workout_dt).total_seconds() / 60, 1
+                        )
+                    except (ValueError, AttributeError):
+                        pass
+
+                # Build exercises list
+                summary_exercises: list[dict[str, Any]] = []
+                for exercise in workout.get("exercises", []):
+                    sets = exercise.get("sets", [])
+                    sets_converted = []
+                    total_reps = 0
+
+                    for set_data in sets:
+                        weight = self._convert_weight(set_data.get("weight_kg"))
+                        reps = set_data.get("reps")
+                        sets_converted.append({
+                            "type": set_data.get("type", "normal"),
+                            "weight": weight,
+                            "weight_unit": self._get_weight_unit(),
+                            "reps": reps,
+                        })
+                        if reps:
+                            total_reps += reps
+
+                    summary_exercises.append({
+                        "name": exercise.get("title", "Unknown"),
+                        "sets": sets_converted,
+                        "best_set": self._get_best_set_string(sets),
+                        "total_reps": total_reps if total_reps > 0 else None,
+                        "notes": exercise.get("notes"),
+                    })
+
+                workout_summaries[date_key] = {
+                    "title": workout.get("title", "Untitled"),
+                    "duration_minutes": duration_minutes,
+                    "total_volume": self._calculate_total_volume(workout),
+                    "total_volume_unit": self._get_weight_unit(),
+                    "exercise_count": len(summary_exercises),
+                    "exercises": summary_exercises,
+                }
+
             return {
                 "workout_count": workout_count,
                 "last_workout": last_workout,
@@ -826,6 +894,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "muscle_group_data": self._aggregate_muscle_groups(),
                 "weekly_muscle_volume": self._calculate_weekly_muscle_volume(),
                 "workout_dates": workout_dates_sorted,
+                "workout_summaries": workout_summaries,
             }
 
         except HevyApiError as err:

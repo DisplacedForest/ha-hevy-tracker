@@ -112,6 +112,7 @@ dmypy.json
 *.db
 *.log
 
-# Claude local project files
+# Local project config
 .CLAUDE.local.md
 CLAUDE.local.md
+.claude/

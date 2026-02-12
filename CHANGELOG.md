@@ -5,6 +5,24 @@ All notable changes to the Hevy Workout Tracker integration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-02-12
+
+### Added
+- **Workout summaries attribute** on `sensor.hevy_last_workout_date`
+  - Date-keyed dict of workout details for the full 30-day window
+  - Each entry includes title, duration, total volume, exercise count, and full exercise/set detail
+  - Enables dashboard cards to show per-day workout info when a date is tapped
+- **Personal Records dashboard card** example in README
+- Brand assets for HACS default repository submission
+
+### Changed
+- Added `integration_type: hub` to manifest for HACS compliance
+- Updated CI workflows: `actions/checkout` v3 → v4, added `workflow_dispatch` trigger, added `permissions: {}` for security
+- Fixed muscle recovery screenshot path in README
+
+### Removed
+- Removed planned/unreleased features section from changelog
+
 ## [0.3.0] - 2026-02-11
 
 ### Added
@@ -124,12 +142,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type hints for better IDE support
 - Configurable update intervals to manage API usage
 
-## [Unreleased]
-
-### Planned - High Priority
-- **Webhook support** - Replace polling with webhooks for real-time updates after workouts
-
-### Planned - Low Priority
-- Graph card examples for workout trends (documentation, not code)
-- Superset tracking (not currently needed)
-- Custom metric support (not currently needed)
