@@ -71,36 +71,35 @@ async def async_setup_entry(
         for exercise_key, exercise_info in exercise_data.items():
             entities.append(HevyExerciseSensor(coordinator, entry, exercise_key))
 
+    # Seed tracking set with initial exercises
+    tracking_key = f"{entry.entry_id}_exercises"
+    hass.data[DOMAIN][tracking_key] = set()
+    if coordinator.data:
+        hass.data[DOMAIN][tracking_key].update(
+            coordinator.data.get("exercise_data", {}).keys()
+        )
+
     async_add_entities(entities)
 
     # Register update listener to add new exercise sensors
-    async def async_add_new_exercise_sensors() -> None:
+    def _add_new_exercise_sensors() -> None:
         """Add sensors for newly discovered exercises."""
         if not coordinator.data:
             return
 
         exercise_data = coordinator.data.get("exercise_data", {})
-        existing_exercises = {
-            entity.exercise_key
-            for entity in hass.data[DOMAIN].get(f"{entry.entry_id}_exercises", set())
-            if isinstance(entity, HevyExerciseSensor)
-        }
+        known = hass.data[DOMAIN][tracking_key]
 
         new_entities = []
         for exercise_key in exercise_data:
-            if exercise_key not in existing_exercises:
+            if exercise_key not in known:
                 new_entities.append(HevyExerciseSensor(coordinator, entry, exercise_key))
-                existing_exercises.add(exercise_key)
+                known.add(exercise_key)
 
         if new_entities:
             async_add_entities(new_entities)
 
-        # Store tracked exercises
-        if f"{entry.entry_id}_exercises" not in hass.data[DOMAIN]:
-            hass.data[DOMAIN][f"{entry.entry_id}_exercises"] = set()
-        hass.data[DOMAIN][f"{entry.entry_id}_exercises"].update(existing_exercises)
-
-    coordinator.async_add_listener(async_add_new_exercise_sensors)
+    coordinator.async_add_listener(_add_new_exercise_sensors)
 
 
 def get_device_info(entry: ConfigEntry) -> DeviceInfo:
