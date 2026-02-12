@@ -624,7 +624,7 @@ styles:
 
 #### Muscle Recovery Grid
 
-![Muscle Recovery](docs/screenshots/muscle-recovery1.png)
+![Muscle Recovery](docs/screenshots/muscle-recovery.png)
 
 ```yaml
 type: custom:button-card
