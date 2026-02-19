@@ -1,343 +1,78 @@
 # Hevy Workout Tracker for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/release/DisplacedForest/ha-hevy-tracker.svg?style=for-the-badge&color=brightgreen)](https://github.com/DisplacedForest/ha-hevy-tracker/releases)
+[![Stars](https://img.shields.io/github/stars/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](https://github.com/DisplacedForest/ha-hevy-tracker/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](https://github.com/DisplacedForest/ha-hevy-tracker/commits/main)
+[![License](https://img.shields.io/github/license/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](LICENSE)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 
-A comprehensive Home Assistant integration for tracking your Hevy workouts with rich, detailed sensor data.
+A comprehensive Home Assistant integration for tracking your [Hevy](https://www.hevyapp.com/) workouts — with rich set-level sensor data, personal records, muscle recovery tracking, and dashboard-ready cards.
 
-## Features
+> **Note:** A [Hevy Pro](https://www.hevyapp.com/pro) subscription is required to access the Hevy API.
 
-- **Rich Workout Data** - Full set-level detail with weight, reps, and duration tracking
-- **Summary Sensors** - Workout count, streaks, weekly activity
-- **Per-Exercise Tracking** - Individual sensors for each exercise with personal records
-- **Muscle Group Tracking** - Which muscles you hit, which are due, days since last trained
-- **Weekly Volume Analysis** - Volume per muscle group with exercise breakdown
-- **Routine Rotation** - Automatically detects next workout in your A/B/C rotation
-- **Smart Metrics** - Total volume, best sets, and workout duration
-- **30-Day History** - Service call for full workout history with enriched data
-- **Automatic Updates** - Configurable polling interval (5-120 minutes)
-- **Unit Support** - Display in imperial (lbs) or metric (kg)
+---
 
 ## Installation
 
-### HACS (Recommended)
+### Via HACS (Recommended)
 
-1. Open HACS in Home Assistant
-2. Click the three dots in the top right corner
-3. Select "Custom repositories"
-4. Add this repository URL with category "Integration"
-5. Click "Install"
-6. Restart Home Assistant
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DisplacedForest&repository=ha-hevy-tracker&category=integration)
+
+1. Click the button above, or search for **Hevy Workout Tracker** in HACS
+2. Click **Download**
+3. Restart Home Assistant
 
 ### Manual Installation
 
-1. Download the `hevy` folder from this repository
+1. Download the `hevy` folder from the [latest release](https://github.com/DisplacedForest/ha-hevy-tracker/releases/latest)
 2. Copy it to your `custom_components` directory
 3. Restart Home Assistant
 
+---
+
 ## Configuration
 
-1. Go to **Settings** → **Devices & Services**
-2. Click **+ Add Integration**
-3. Search for **Hevy Workout Tracker**
-4. Enter your Hevy API key
+1. Go to **Settings** → **Devices & Services** → **+ Add Integration**
+2. Search for **Hevy Workout Tracker**
+3. Enter your Hevy API key
 
 ### Getting Your API Key
 
-> **Note:** A Hevy Pro subscription is required to access the API.
+1. Open the Hevy app → **Profile** → **Settings** → **Developer**
+2. Copy your API key
 
-1. Log in to your Hevy account
-2. Go to **Settings** → **Developer**
-3. Copy your API key
-
-## Sensors
-
-### Summary Sensors
-
-| Sensor | Description | State |
-|--------|-------------|-------|
-| `sensor.hevy_workout_count` | Total lifetime workouts | Integer count |
-| `sensor.hevy_last_workout_date` | Timestamp of most recent workout; includes `workout_dates` list and `workout_summaries` dict for 30-day history | ISO datetime |
-| `sensor.hevy_last_workout_summary` | Full summary of last workout | Workout title |
-| `sensor.hevy_weekly_workout_count` | Workouts in last 7 days | Integer count |
-| `sensor.hevy_current_streak` | Consecutive workout days | Days (allows 1 rest day) |
-| `sensor.hevy_muscle_group_summary` | Muscle groups from last workout | Comma-separated groups |
-| `sensor.hevy_weekly_muscle_volume` | Total weekly volume across all groups | Volume (lbs or kg) |
-| `sensor.hevy_next_workout` | Next routine in rotation | Routine title |
-
-### Binary Sensors
-
-| Sensor | Description |
-|--------|-------------|
-| `binary_sensor.hevy_worked_out_today` | On if workout logged today |
-| `binary_sensor.hevy_worked_out_this_week` | On if any workout in last 7 days |
-
-### Per-Exercise Sensors
-
-Dynamically created for each unique exercise:
-
-**Example:** `sensor.hevy_bench_press_dumbbell`
-
-**State:** Best set (e.g., "35 lbs × 12" or "60s")
-
-**Attributes:**
-- `last_workout_date` - ISO datetime of last workout
-- `last_workout_sets` - List of all sets from last workout
-- `weight` - Most recent weight used
-- `weight_unit` - Unit system (lbs or kg)
-- `total_reps` - Total reps from last workout
-- `total_sets` - Number of sets performed
-- `personal_record_weight` - Heaviest weight ever used
-- `personal_record_reps` - Most reps at PR weight
-- `exercise_template_id` - Hevy exercise ID
-
-## Detailed Sensor Attributes
-
-### Muscle Group Summary Attributes
-
-```yaml
-last_workout_primary_groups:
-  - chest
-  - shoulders
-  - quadriceps
-  - biceps
-last_workout_secondary_groups:
-  - triceps
-  - glutes
-  - hamstrings
-last_workout_date: "2026-02-11T16:21:10+00:00"
-days_since_last:
-  chest: 0
-  shoulders: 0
-  quadriceps: 0
-  lats: 2
-  hamstrings: 4
-muscles_due:
-  - hamstrings
-  - glutes
-```
-
-### Weekly Muscle Volume Attributes
-
-```yaml
-period_start: "2026-02-04T16:00:00"
-period_end: "2026-02-11T16:00:00"
-muscle_groups:
-  chest: 1860.0
-  shoulders: 960.0
-  quadriceps: 2025.0
-exercise_breakdown:
-  chest:
-    - exercise: "Bench Press (Dumbbell)"
-      volume: 1860.0
-      sets: 3
-  shoulders:
-    - exercise: "Overhead Press (Dumbbell)"
-      volume: 960.0
-      sets: 3
-total_sets: 45
-total_workouts: 5
-```
-
-### Next Workout Attributes
-
-```yaml
-routine_id: "uuid-of-next-routine"
-routine_title: "Day B - Pull/Hinge Focus"
-last_workout_title: "Day A - Push/Quad Focus"
-last_workout_routine_id: "uuid-of-last-routine"
-rotation_position: 2
-rotation_total: 3
-exercises_preview:
-  - "Barbell Row"
-  - "Romanian Deadlift"
-  - "Pull-up"
-  - "Face Pull"
-```
-
-### Last Workout Date — `workout_summaries` Attribute
-
-The `workout_summaries` attribute on `sensor.hevy_last_workout_date` provides a date-keyed dict of workout details for the 30-day window. This enables dashboard cards (e.g., the 30-day calendar) to show per-day workout info when a date is tapped.
-
-```yaml
-workout_summaries:
-  "2026-02-10":
-    title: "Push Day"
-    duration_minutes: 62.5
-    total_volume: 12450
-    total_volume_unit: "lbs"
-    exercise_count: 5
-    exercises:
-      - name: "Bench Press (Barbell)"
-        sets:
-          - type: "normal"
-            weight: 185.0
-            weight_unit: "lbs"
-            reps: 5
-        best_set: "185.0 lbs × 5"
-        total_reps: 25
-        notes: null
-  "2026-02-08":
-    title: "Pull Day"
-    duration_minutes: 55.2
-    total_volume: 9800
-    total_volume_unit: "lbs"
-    exercise_count: 4
-    exercises:
-      - name: "Barbell Row"
-        sets:
-          - type: "normal"
-            weight: 135.0
-            weight_unit: "lbs"
-            reps: 8
-        best_set: "135.0 lbs × 8"
-        total_reps: 32
-        notes: null
-```
-
-If multiple workouts fall on the same date, only the most recent one is included.
-
-### Last Workout Summary Attributes
-
-```yaml
-date: "2026-02-11T16:21:10+00:00"
-duration_minutes: 4.7
-total_volume: 1158.5
-total_volume_unit: "lbs"
-exercise_count: 2
-exercises:
-  - name: "Bench Press (Dumbbell)"
-    sets:
-      - type: "normal"
-        weight: 35.0
-        weight_unit: "lbs"
-        reps: 12
-        duration_seconds: null
-      - type: "normal"
-        weight: 35.0
-        weight_unit: "lbs"
-        reps: 12
-        duration_seconds: null
-    best_set: "35 lbs × 12"
-    total_reps: 24
-  - name: "Plank"
-    sets:
-      - type: "normal"
-        weight: null
-        weight_unit: "lbs"
-        reps: null
-        duration_seconds: 60
-    best_set: "1m 00s"
-    total_duration_seconds: 60
-```
-
-## Services
-
-### `hevy.get_workout_history`
-
-Returns enriched workout history for a specified number of days. Call via **Developer Tools > Services**.
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `config_entry_id` | Yes | - | The Hevy integration config entry ID |
-| `days` | No | 30 | Number of days of history (1-90) |
-
-**Response includes:**
-- `summary` - Total workouts, total volume, workout days, avg duration, avg volume per workout
-- `workouts` - Array of workouts with full exercise/set detail, muscle groups, and duration
-
-**Example automation using service response:**
-```yaml
-action:
-  - service: hevy.get_workout_history
-    data:
-      config_entry_id: !input config_entry
-      days: 7
-    response_variable: history
-  - service: notify.mobile_app
-    data:
-      message: "This week: {{ history.summary.total_workouts }} workouts, {{ history.summary.total_volume }} lbs total volume"
-```
-
-## Configuration Options
+### Options
 
 Access via **Devices & Services** → **Hevy Workout Tracker** → **Configure**
 
-- **Polling Interval** - How often to fetch new data (5-120 minutes, default: 15)
-- **Unit System** - Display units (imperial/metric, default: imperial)
+| Option | Default | Description |
+|--------|---------|-------------|
+| Polling Interval | 15 min | How often to fetch new data (5–120 min) |
+| Unit System | Imperial | Display weights in lbs or kg |
 
-## Weight Conversion
+---
 
-- All weights displayed in lbs (converted from kg)
-- Rounded to nearest 0.5 lbs for readability
-- Conversion factor: 1 kg = 2.20462 lbs
+## Features
 
-## API Details
+- **Rich Workout Data** — Full set-level detail with weight, reps, and duration tracking
+- **Summary Sensors** — Workout count, streaks, and weekly activity at a glance
+- **Per-Exercise Sensors** — Individual sensors for each exercise with personal records
+- **Muscle Group Tracking** — Which muscles you hit, which are due, days since last trained
+- **Weekly Volume Analysis** — Volume per muscle group with full exercise breakdown
+- **Routine Rotation** — Automatically detects the next workout in your A/B/C rotation
+- **30-Day History** — Service call for full workout history with enriched data
+- **Automatic Updates** — Configurable polling interval (5–120 minutes)
+- **Unit Support** — Imperial (lbs) or metric (kg)
 
-This integration uses the official Hevy API:
-- Base URL: `https://api.hevyapp.com/v1/`
-- Authentication: API key header
-- Rate limiting: Respects polling interval
+---
 
-## Use Cases
+## Dashboard
 
-### Automation Examples
+The integration is designed to power a full workout dashboard. All examples below use [`custom:button-card`](https://github.com/custom-cards/button-card) and [`custom:layout-card`](https://github.com/thomasloven/lovelace-layout-card), both available in HACS.
 
-**Workout Streak Notification:**
-```yaml
-automation:
-  - alias: "Workout Streak Milestone"
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.hevy_current_streak
-        above: 7
-    action:
-      - service: notify.mobile_app
-        data:
-          message: "7 day workout streak! Keep it up!"
-```
-
-**Rest Day Reminder:**
-```yaml
-automation:
-  - alias: "Rest Day Reminder"
-    trigger:
-      - platform: time
-        at: "18:00:00"
-    condition:
-      - condition: state
-        entity_id: binary_sensor.hevy_worked_out_today
-        state: "off"
-      - condition: numeric_state
-        entity_id: sensor.hevy_current_streak
-        above: 0
-    action:
-      - service: notify.mobile_app
-        data:
-          message: "Don't break your streak! Time for a workout."
-```
-
-**Personal Record Alert:**
-```yaml
-automation:
-  - alias: "New PR Notification"
-    trigger:
-      - platform: state
-        entity_id: sensor.hevy_bench_press_dumbbell
-        attribute: personal_record_weight
-    condition:
-      - condition: template
-        value_template: "{{ trigger.to_state.attributes.personal_record_weight > trigger.from_state.attributes.personal_record_weight }}"
-    action:
-      - service: notify.mobile_app
-        data:
-          message: "New PR on Bench Press: {{ trigger.to_state.attributes.personal_record_weight }} {{ trigger.to_state.attributes.weight_unit }}!"
-```
-
-### Dashboard Examples
-
-The following examples use [`custom:button-card`](https://github.com/custom-cards/button-card) and [`custom:layout-card`](https://github.com/thomasloven/lovelace-layout-card), both installable via HACS.
-
-#### Hero Stats Grid
+<details>
+<summary><b>Hero Stats Grid</b></summary>
 
 ![Hero Stats](docs/screenshots/hero-stats.png)
 
@@ -490,7 +225,10 @@ cards:
           - width: 100%
 ```
 
-#### Last Workout Card
+</details>
+
+<details>
+<summary><b>Last Workout Card</b></summary>
 
 ![Last Workout](docs/screenshots/last-workout.png)
 
@@ -557,7 +295,10 @@ styles:
       - white-space: normal
 ```
 
-#### Weekly Volume Bar Chart
+</details>
+
+<details>
+<summary><b>Weekly Volume Bar Chart</b></summary>
 
 ![Weekly Volume](docs/screenshots/weekly-volume.png)
 
@@ -622,7 +363,10 @@ styles:
       - white-space: normal
 ```
 
-#### Muscle Recovery Grid
+</details>
+
+<details>
+<summary><b>Muscle Recovery Grid</b></summary>
 
 ![Muscle Recovery](docs/screenshots/muscle-recovery.png)
 
@@ -689,7 +433,10 @@ styles:
       - white-space: normal
 ```
 
-#### Personal Records Grid
+</details>
+
+<details>
+<summary><b>Personal Records Grid</b></summary>
 
 ![Personal Records](docs/screenshots/personal-records.png)
 
@@ -760,7 +507,10 @@ styles:
       - white-space: normal
 ```
 
-#### 30-Day Activity Calendar
+</details>
+
+<details>
+<summary><b>30-Day Activity Calendar</b></summary>
 
 ```yaml
 type: custom:button-card
@@ -824,32 +574,285 @@ styles:
       - white-space: normal
 ```
 
+</details>
+
+---
+
+## Sensors
+
+### Summary Sensors
+
+| Sensor | Description | State |
+|--------|-------------|-------|
+| `sensor.hevy_workout_count` | Total lifetime workouts | Integer |
+| `sensor.hevy_last_workout_date` | Timestamp of most recent workout | ISO datetime |
+| `sensor.hevy_last_workout_summary` | Full summary of last workout | Workout title |
+| `sensor.hevy_weekly_workout_count` | Workouts completed in last 7 days | Integer |
+| `sensor.hevy_current_streak` | Consecutive workout days (1 rest day allowed) | Days |
+| `sensor.hevy_muscle_group_summary` | Muscle groups trained in last workout | Comma-separated |
+| `sensor.hevy_weekly_muscle_volume` | Total weekly volume across all groups | Volume (lbs or kg) |
+| `sensor.hevy_next_workout` | Next routine in your A/B/C rotation | Routine title |
+
+### Binary Sensors
+
+| Sensor | Description |
+|--------|-------------|
+| `binary_sensor.hevy_worked_out_today` | `on` if a workout was logged today |
+| `binary_sensor.hevy_worked_out_this_week` | `on` if any workout in last 7 days |
+
+### Per-Exercise Sensors
+
+Dynamically created for each unique exercise in your history.
+
+**Example:** `sensor.hevy_bench_press_dumbbell`
+**State:** Best set — e.g., `35 lbs × 12` or `60s`
+
+| Attribute | Description |
+|-----------|-------------|
+| `last_workout_date` | ISO datetime of last time this exercise was performed |
+| `last_workout_sets` | List of all sets from last workout |
+| `weight` | Most recent weight used |
+| `weight_unit` | Unit system (lbs or kg) |
+| `total_reps` | Total reps from last workout |
+| `total_sets` | Number of sets performed |
+| `personal_record_weight` | Heaviest weight ever used |
+| `personal_record_reps` | Most reps at PR weight |
+| `exercise_template_id` | Hevy exercise ID |
+
+---
+
+## Services
+
+### `hevy.get_workout_history`
+
+Returns enriched workout history for a specified number of days. Call via **Developer Tools → Services**.
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `config_entry_id` | Yes | — | The Hevy integration config entry ID |
+| `days` | No | 30 | Number of days of history (1–90) |
+
+**Response includes:**
+- `summary` — Total workouts, total volume, workout days, avg duration, avg volume per workout
+- `workouts` — Array of workouts with full exercise/set detail, muscle groups, and duration
+
+<details>
+<summary><b>Example automation using service response</b></summary>
+
+```yaml
+action:
+  - service: hevy.get_workout_history
+    data:
+      config_entry_id: !input config_entry
+      days: 7
+    response_variable: history
+  - service: notify.mobile_app
+    data:
+      message: "This week: {{ history.summary.total_workouts }} workouts, {{ history.summary.total_volume }} lbs total volume"
+```
+
+</details>
+
+---
+
+## Automation Examples
+
+<details>
+<summary><b>Workout streak milestone</b></summary>
+
+```yaml
+automation:
+  - alias: "Workout Streak Milestone"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.hevy_current_streak
+        above: 7
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "7 day workout streak! Keep it up!"
+```
+
+</details>
+
+<details>
+<summary><b>Rest day reminder</b></summary>
+
+```yaml
+automation:
+  - alias: "Rest Day Reminder"
+    trigger:
+      - platform: time
+        at: "18:00:00"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.hevy_worked_out_today
+        state: "off"
+      - condition: numeric_state
+        entity_id: sensor.hevy_current_streak
+        above: 0
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "Don't break your streak! Time for a workout."
+```
+
+</details>
+
+<details>
+<summary><b>Personal record alert</b></summary>
+
+```yaml
+automation:
+  - alias: "New PR Notification"
+    trigger:
+      - platform: state
+        entity_id: sensor.hevy_bench_press_dumbbell
+        attribute: personal_record_weight
+    condition:
+      - condition: template
+        value_template: "{{ trigger.to_state.attributes.personal_record_weight > trigger.from_state.attributes.personal_record_weight }}"
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "New PR on Bench Press: {{ trigger.to_state.attributes.personal_record_weight }} {{ trigger.to_state.attributes.weight_unit }}!"
+```
+
+</details>
+
+---
+
+## Sensor Attribute Reference
+
+<details>
+<summary><b>Muscle Group Summary attributes</b></summary>
+
+```yaml
+last_workout_primary_groups:
+  - chest
+  - shoulders
+  - quadriceps
+  - biceps
+last_workout_secondary_groups:
+  - triceps
+  - glutes
+  - hamstrings
+last_workout_date: "2026-02-11T16:21:10+00:00"
+days_since_last:
+  chest: 0
+  shoulders: 0
+  quadriceps: 0
+  lats: 2
+  hamstrings: 4
+muscles_due:
+  - hamstrings
+  - glutes
+```
+
+</details>
+
+<details>
+<summary><b>Weekly Muscle Volume attributes</b></summary>
+
+```yaml
+period_start: "2026-02-04T16:00:00"
+period_end: "2026-02-11T16:00:00"
+muscle_groups:
+  chest: 1860.0
+  shoulders: 960.0
+  quadriceps: 2025.0
+exercise_breakdown:
+  chest:
+    - exercise: "Bench Press (Dumbbell)"
+      volume: 1860.0
+      sets: 3
+  shoulders:
+    - exercise: "Overhead Press (Dumbbell)"
+      volume: 960.0
+      sets: 3
+total_sets: 45
+total_workouts: 5
+```
+
+</details>
+
+<details>
+<summary><b>Next Workout attributes</b></summary>
+
+```yaml
+routine_id: "uuid-of-next-routine"
+routine_title: "Day B - Pull/Hinge Focus"
+last_workout_title: "Day A - Push/Quad Focus"
+last_workout_routine_id: "uuid-of-last-routine"
+rotation_position: 2
+rotation_total: 3
+exercises_preview:
+  - "Barbell Row"
+  - "Romanian Deadlift"
+  - "Pull-up"
+  - "Face Pull"
+```
+
+</details>
+
+<details>
+<summary><b>Last Workout Date — <code>workout_summaries</code> attribute</b></summary>
+
+The `workout_summaries` attribute on `sensor.hevy_last_workout_date` provides a date-keyed dict of the last 30 days of workouts, useful for powering calendar cards.
+
+```yaml
+workout_summaries:
+  "2026-02-10":
+    title: "Push Day"
+    duration_minutes: 62.5
+    total_volume: 12450
+    total_volume_unit: "lbs"
+    exercise_count: 5
+    exercises:
+      - name: "Bench Press (Barbell)"
+        sets:
+          - type: "normal"
+            weight: 185.0
+            weight_unit: "lbs"
+            reps: 5
+        best_set: "185.0 lbs × 5"
+        total_reps: 25
+        notes: null
+```
+
+If multiple workouts fall on the same date, only the most recent is included.
+
+</details>
+
+---
+
 ## Troubleshooting
 
-**Integration not showing up:**
-- Ensure you've restarted Home Assistant after installation
-- Check logs for errors: Settings → System → Logs
+**Integration not showing up after install**
+- Restart Home Assistant after installation
+- Check logs: **Settings → System → Logs**
 
-**Invalid API key error:**
-- Verify your API key in the Hevy app
-- Try generating a new API key
+**Invalid API key error**
+- Verify your key in the Hevy app under **Settings → Developer**
+- Try regenerating the key
 
-**Sensors not updating:**
-- Check your polling interval setting
-- Verify internet connection
-- Check Home Assistant logs for API errors
+**Sensors not updating**
+- Check your polling interval in the integration options
+- Review HA logs for API errors
 
-**Missing exercises:**
-- Sensors are created dynamically on first fetch
-- Wait for one polling cycle after adding new exercises
-- Check that the exercise has data in your Hevy account
+**Missing exercise sensors**
+- Sensors are created dynamically on first data fetch
+- Wait one polling cycle after logging a new exercise type
+
+---
 
 ## Support
 
-For issues, feature requests, or contributions:
-- GitHub Issues: [Report an issue](https://github.com/zachary/hevy-hass/issues)
-- Home Assistant Community: [Discussion thread](https://community.home-assistant.io/)
+- [Open an issue](https://github.com/DisplacedForest/ha-hevy-tracker/issues) for bug reports or feature requests
+- [Home Assistant Community](https://community.home-assistant.io/) for general discussion
+
+---
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT — see [LICENSE](LICENSE) for details.
