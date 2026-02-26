@@ -5,6 +5,11 @@ All notable changes to the Hevy Workout Tracker integration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-02-26
+
+### Fixed
+- Fix crash when tracking PRs for cardio exercises (treadmill, etc.) where reps is null in the API response (#2)
+
 ## [1.0.0] - 2026-02-12
 
 ### Added

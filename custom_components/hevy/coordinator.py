@@ -529,7 +529,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Track PR for weighted exercises (always store in kg for consistency)
                 for set_data in exercise.get("sets", []):
                     weight_kg = set_data.get("weight_kg")
-                    reps = set_data.get("reps", 0)
+                    reps = set_data.get("reps") or 0
 
                     if weight_kg is not None:
                         if exercise_title not in self._exercise_prs:
@@ -541,11 +541,12 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         else:
                             current_pr = self._exercise_prs[exercise_title]
                             # Update if heavier weight, or same weight with more reps
+                            current_reps = current_pr["reps"] or 0
                             if (
                                 weight_kg > current_pr["weight_kg"]
                                 or (
                                     weight_kg == current_pr["weight_kg"]
-                                    and reps > current_pr["reps"]
+                                    and reps > current_reps
                                 )
                             ):
                                 self._exercise_prs[exercise_title] = {
