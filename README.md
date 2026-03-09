@@ -6,6 +6,7 @@
 [![Last Commit](https://img.shields.io/github/last-commit/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](https://github.com/DisplacedForest/ha-hevy-tracker/commits/main)
 [![License](https://img.shields.io/github/license/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/o7triud67l)
 
 A comprehensive Home Assistant integration for tracking your [Hevy](https://www.hevyapp.com/) workouts — with rich set-level sensor data, personal records, muscle recovery tracking, and dashboard-ready cards.
 
