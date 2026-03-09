@@ -177,6 +177,7 @@ class HevyLastWorkoutDateSensor(HevyBaseSensor):
 
     _attr_icon = "mdi:calendar-clock"
     _attr_device_class = "timestamp"
+    _unrecorded_attributes = frozenset({"workout_dates", "workout_summaries"})
 
     def __init__(
         self, coordinator: HevyDataUpdateCoordinator, entry: ConfigEntry
