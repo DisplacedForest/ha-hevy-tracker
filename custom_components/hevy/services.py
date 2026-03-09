@@ -9,6 +9,7 @@ import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.helpers import config_validation as cv
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import HevyDataUpdateCoordinator
@@ -39,7 +40,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             raise ValueError(f"Config entry {config_entry_id} not found")
 
         coordinator: HevyDataUpdateCoordinator = hass.data[DOMAIN][config_entry_id]
-        cutoff = datetime.now() - timedelta(days=days)
+        cutoff = dt_util.now() - timedelta(days=days)
 
         # Filter workout history to requested window
         filtered_workouts: list[dict[str, Any]] = []
@@ -50,7 +51,7 @@ def async_register_services(hass: HomeAssistant) -> None:
                     workout_dt = datetime.fromisoformat(
                         start_time.replace("Z", "+00:00")
                     )
-                    if workout_dt.replace(tzinfo=None) >= cutoff:
+                    if workout_dt >= cutoff:
                         filtered_workouts.append(workout)
                 except (ValueError, AttributeError):
                     continue
@@ -83,8 +84,10 @@ def async_register_services(hass: HomeAssistant) -> None:
 
             if start_time:
                 try:
-                    day_str = datetime.fromisoformat(
-                        start_time.replace("Z", "+00:00")
+                    day_str = dt_util.as_local(
+                        datetime.fromisoformat(
+                            start_time.replace("Z", "+00:00")
+                        )
                     ).strftime("%Y-%m-%d")
                     if day_str not in workout_days:
                         workout_days.append(day_str)

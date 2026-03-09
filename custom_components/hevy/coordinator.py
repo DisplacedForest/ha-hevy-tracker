@@ -7,6 +7,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import HevyApiClient, HevyApiError
 from .const import (
@@ -576,7 +577,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if start_time:
                 try:
                     dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                    workout_dates.add(dt.date())
+                    workout_dates.add(dt_util.as_local(dt).date())
                 except (ValueError, AttributeError):
                     continue
 
@@ -584,7 +585,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return 0
 
         sorted_dates = sorted(workout_dates, reverse=True)
-        today = datetime.now().date()
+        today = dt_util.now().date()
 
         # Check if there's a workout today or yesterday
         if sorted_dates[0] not in (today, today - timedelta(days=1)):
@@ -633,7 +634,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Process data for sensors
             last_workout = workouts[0] if workouts else None
-            now = datetime.now()
+            now = dt_util.now()
 
             # Calculate weekly workout count
             week_ago = now - timedelta(days=7)
@@ -645,7 +646,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         workout_dt = datetime.fromisoformat(
                             start_time.replace("Z", "+00:00")
                         )
-                        if workout_dt.replace(tzinfo=None) >= week_ago:
+                        if workout_dt >= week_ago:
                             weekly_count += 1
                     except (ValueError, AttributeError):
                         continue
@@ -659,7 +660,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         workout_dt = datetime.fromisoformat(
                             start_time.replace("Z", "+00:00")
                         )
-                        worked_out_today = workout_dt.date() == now.date()
+                        worked_out_today = (
+                            dt_util.as_local(workout_dt).date() == now.date()
+                        )
                     except (ValueError, AttributeError):
                         pass
 
@@ -797,7 +800,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         dt = datetime.fromisoformat(
                             start_time.replace("Z", "+00:00")
                         )
-                        workout_dates.add(dt.strftime("%Y-%m-%d"))
+                        workout_dates.add(
+                            dt_util.as_local(dt).strftime("%Y-%m-%d")
+                        )
                     except (ValueError, AttributeError):
                         continue
             workout_dates_sorted = sorted(workout_dates)
@@ -813,7 +818,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     workout_dt = datetime.fromisoformat(
                         start_time.replace("Z", "+00:00")
                     )
-                    date_key = workout_dt.strftime("%Y-%m-%d")
+                    date_key = dt_util.as_local(workout_dt).strftime("%Y-%m-%d")
                 except (ValueError, AttributeError):
                     continue
 
