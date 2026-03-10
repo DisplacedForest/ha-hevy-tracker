@@ -5,6 +5,13 @@ All notable changes to the Hevy Workout Tracker integration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-03-10
+
+### Fixed
+- Fix weekly workout count spanning 8 days instead of 7 by using exclusive boundary comparison (#4)
+- Apply same boundary fix to weekly muscle volume calculation and service call history filter
+- Use local timezone for weekly muscle volume calculation (missed in #3 timezone fix)
+
 ## [1.0.4] - 2026-03-09
 
 ### Fixed

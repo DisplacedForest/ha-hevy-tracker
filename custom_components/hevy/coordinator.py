@@ -315,7 +315,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Returns:
             Dict with volume data per muscle group
         """
-        now = datetime.now(tz=timezone.utc)
+        now = dt_util.now()
         week_ago = now - timedelta(days=7)
 
         volume_by_group: dict[str, float] = {}
@@ -335,7 +335,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except (ValueError, AttributeError):
                 continue
 
-            if workout_dt < week_ago:
+            if workout_dt <= week_ago:
                 continue
 
             total_workouts += 1
@@ -646,7 +646,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         workout_dt = datetime.fromisoformat(
                             start_time.replace("Z", "+00:00")
                         )
-                        if workout_dt >= week_ago:
+                        if workout_dt > week_ago:
                             weekly_count += 1
                     except (ValueError, AttributeError):
                         continue

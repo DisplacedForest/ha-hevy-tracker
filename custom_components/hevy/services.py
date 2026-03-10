@@ -51,7 +51,7 @@ def async_register_services(hass: HomeAssistant) -> None:
                     workout_dt = datetime.fromisoformat(
                         start_time.replace("Z", "+00:00")
                     )
-                    if workout_dt >= cutoff:
+                    if workout_dt > cutoff:
                         filtered_workouts.append(workout)
                 except (ValueError, AttributeError):
                     continue
