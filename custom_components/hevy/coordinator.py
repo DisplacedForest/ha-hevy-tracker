@@ -14,6 +14,8 @@ from .const import (
     DOMAIN,
     KG_TO_LBS,
     MAX_WORKOUT_PAGES,
+    METERS_TO_KM,
+    METERS_TO_MILES,
     MUSCLE_DUE_THRESHOLD_DAYS,
     UNIT_SYSTEM_IMPERIAL,
     UNIT_SYSTEM_METRIC,
@@ -51,6 +53,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.unit_system = unit_system
         self._workout_history: list[dict[str, Any]] = []
         self._exercise_prs: dict[str, dict[str, Any]] = {}
+        self._exercise_distance_prs: dict[str, dict[str, Any]] = {}
         self._exercise_templates: dict[str, dict] = {}  # Cache templates by ID
         self._routines: list[dict[str, Any]] = []
 
@@ -409,6 +412,66 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "exercise_breakdown": exercise_breakdown,
         }
 
+    def _calculate_weekly_distance(self) -> dict[str, Any]:
+        """Calculate total distance per exercise for the last 7 days.
+
+        Returns:
+            Dict with distance data per exercise
+        """
+        now = dt_util.now()
+        week_ago = now - timedelta(days=7)
+
+        exercise_distances: dict[str, float] = {}  # exercise title -> meters
+        total_distance_meters = 0.0
+
+        for workout in self._workout_history:
+            start_time = workout.get("start_time")
+            if not start_time:
+                continue
+            try:
+                workout_dt = datetime.fromisoformat(
+                    start_time.replace("Z", "+00:00")
+                )
+            except (ValueError, AttributeError):
+                continue
+
+            if workout_dt <= week_ago:
+                continue
+
+            for exercise in workout.get("exercises", []):
+                exercise_title = exercise.get("title", "Unknown")
+
+                for set_data in exercise.get("sets", []):
+                    set_type = set_data.get("type", "normal")
+                    if set_type not in ("normal", "dropset", "failure"):
+                        continue
+
+                    distance_meters = set_data.get("distance_meters")
+                    if distance_meters is None:
+                        continue
+
+                    exercise_distances[exercise_title] = (
+                        exercise_distances.get(exercise_title, 0) + distance_meters
+                    )
+                    total_distance_meters += distance_meters
+
+        # Convert to user's unit system
+        exercise_breakdown = {}
+        for title, meters in exercise_distances.items():
+            exercise_breakdown[title] = round(
+                self._convert_distance(meters) or 0, 2
+            )
+
+        return {
+            "total_distance": round(
+                self._convert_distance(total_distance_meters) or 0, 2
+            ),
+            "distance_unit": self._get_distance_unit(),
+            "exercise_breakdown": exercise_breakdown,
+            "period_start": (now - timedelta(days=7)).isoformat(),
+            "period_end": now.isoformat(),
+        }
+
     def _convert_weight(self, weight_kg: float | None) -> float | None:
         """Convert weight based on unit system.
 
@@ -436,6 +499,31 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             Unit string (kg or lbs)
         """
         return "kg" if self.unit_system == UNIT_SYSTEM_METRIC else "lbs"
+
+    def _convert_distance(self, distance_meters: float | None) -> float | None:
+        """Convert distance from meters based on unit system.
+
+        Args:
+            distance_meters: Distance in meters
+
+        Returns:
+            Distance in configured unit system, or None
+        """
+        if distance_meters is None:
+            return None
+
+        if self.unit_system == UNIT_SYSTEM_METRIC:
+            return round(distance_meters * METERS_TO_KM, 2)
+        else:
+            return round(distance_meters * METERS_TO_MILES, 2)
+
+    def _get_distance_unit(self) -> str:
+        """Get the distance unit string.
+
+        Returns:
+            Unit string (km or mi)
+        """
+        return "km" if self.unit_system == UNIT_SYSTEM_METRIC else "mi"
 
     @staticmethod
     def _format_duration(seconds: int | None) -> str:
@@ -467,9 +555,31 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not sets:
             return "No sets"
 
-        # Check if this is a timed exercise
         first_set = sets[0]
-        if first_set.get("duration_seconds") is not None:
+
+        # Check if this is a distance exercise
+        has_distance = any(s.get("distance_meters") is not None for s in sets)
+        has_weight = any(s.get("weight_kg") is not None for s in sets)
+        if has_distance and not has_weight:
+            best_distance = max(
+                (s.get("distance_meters", 0) for s in sets), default=0
+            )
+            converted = self._convert_distance(best_distance)
+            unit = self._get_distance_unit()
+            # Find the set with the best distance to check for duration
+            best_set = max(
+                sets,
+                key=lambda s: (s.get("distance_meters") or 0),
+                default=sets[0],
+            )
+            duration = best_set.get("duration_seconds")
+            if converted is not None and duration:
+                return f"{converted} {unit} in {self._format_duration(duration)}"
+            if converted is not None:
+                return f"{converted} {unit}"
+
+        # Check if this is a timed exercise
+        if first_set.get("duration_seconds") is not None and not has_distance:
             max_duration = max(
                 (s.get("duration_seconds", 0) for s in sets), default=0
             )
@@ -527,8 +637,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if not exercise_title:
                     continue
 
-                # Track PR for weighted exercises (always store in kg for consistency)
                 for set_data in exercise.get("sets", []):
+                    # Track PR for weighted exercises (always store in kg for consistency)
                     weight_kg = set_data.get("weight_kg")
                     reps = set_data.get("reps") or 0
 
@@ -541,7 +651,6 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             }
                         else:
                             current_pr = self._exercise_prs[exercise_title]
-                            # Update if heavier weight, or same weight with more reps
                             current_reps = current_pr["reps"] or 0
                             if (
                                 weight_kg > current_pr["weight_kg"]
@@ -555,6 +664,20 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                     "reps": reps,
                                     "template_id": template_id,
                                 }
+
+                    # Track PR for distance exercises (store in meters)
+                    distance_meters = set_data.get("distance_meters")
+                    if distance_meters is not None:
+                        if exercise_title not in self._exercise_distance_prs:
+                            self._exercise_distance_prs[exercise_title] = {
+                                "distance_meters": distance_meters,
+                                "template_id": template_id,
+                            }
+                        elif distance_meters > self._exercise_distance_prs[exercise_title]["distance_meters"]:
+                            self._exercise_distance_prs[exercise_title] = {
+                                "distance_meters": distance_meters,
+                                "template_id": template_id,
+                            }
 
     def _calculate_current_streak(self, workouts: list[dict[str, Any]]) -> int:
         """Calculate current workout streak (consecutive days with workouts).
@@ -677,11 +800,13 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     sets_converted = []
                     total_reps = 0
                     total_duration = 0
+                    total_distance_meters = 0
 
                     for set_data in sets:
                         weight = self._convert_weight(set_data.get("weight_kg"))
                         reps = set_data.get("reps")
                         duration = set_data.get("duration_seconds")
+                        distance = self._convert_distance(set_data.get("distance_meters"))
 
                         set_info = {
                             "type": set_data.get("type", "normal"),
@@ -689,6 +814,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "weight_unit": self._get_weight_unit(),
                             "reps": reps,
                             "duration_seconds": duration,
+                            "distance": distance,
+                            "distance_unit": self._get_distance_unit(),
                         }
                         sets_converted.append(set_info)
 
@@ -696,6 +823,10 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             total_reps += reps
                         if duration:
                             total_duration += duration
+                        if set_data.get("distance_meters") is not None:
+                            total_distance_meters += set_data["distance_meters"]
+
+                    total_distance = self._convert_distance(total_distance_meters)
 
                     exercise_summary = {
                         "name": exercise_title,
@@ -705,6 +836,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "total_duration_seconds": (
                             total_duration if total_duration > 0 else None
                         ),
+                        "total_distance": total_distance if total_distance_meters > 0 else None,
+                        "distance_unit": self._get_distance_unit() if total_distance_meters > 0 else None,
                         "notes": exercise.get("notes"),
                     }
                     exercises_summary.append(exercise_summary)
@@ -740,12 +873,14 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     sets_converted = []
                     total_reps = 0
                     total_duration = 0
+                    total_distance_meters = 0
                     last_weight = None
 
                     for set_data in sets:
                         weight = self._convert_weight(set_data.get("weight_kg"))
                         reps = set_data.get("reps")
                         duration = set_data.get("duration_seconds")
+                        distance = self._convert_distance(set_data.get("distance_meters"))
 
                         sets_converted.append(
                             {
@@ -754,6 +889,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                 "weight_unit": self._get_weight_unit(),
                                 "reps": reps,
                                 "duration_seconds": duration,
+                                "distance": distance,
+                                "distance_unit": self._get_distance_unit(),
                             }
                         )
 
@@ -763,6 +900,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             total_reps += reps
                         if duration:
                             total_duration += duration
+                        if set_data.get("distance_meters") is not None:
+                            total_distance_meters += set_data["distance_meters"]
 
                     # Only update if this is the most recent workout for this exercise
                     if exercise_title not in exercise_data:
@@ -772,6 +911,15 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             if pr_data.get("weight_kg")
                             else None
                         )
+
+                        distance_pr_data = self._exercise_distance_prs.get(exercise_title, {})
+                        pr_distance = (
+                            self._convert_distance(distance_pr_data.get("distance_meters"))
+                            if distance_pr_data.get("distance_meters")
+                            else None
+                        )
+
+                        total_distance = self._convert_distance(total_distance_meters)
 
                         exercise_data[exercise_title] = {
                             "display_name": exercise.get("title", "Unknown"),
@@ -789,6 +937,10 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "total_duration_seconds": (
                                 total_duration if total_duration > 0 else None
                             ),
+                            "total_distance": total_distance if total_distance_meters > 0 else None,
+                            "distance_unit": self._get_distance_unit() if total_distance_meters > 0 else None,
+                            "personal_record_distance": pr_distance,
+                            "personal_record_distance_unit": self._get_distance_unit() if pr_distance else None,
                         }
 
             # Build deduplicated, sorted list of workout dates (YYYY-MM-DD)
@@ -849,11 +1001,14 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     for set_data in sets:
                         weight = self._convert_weight(set_data.get("weight_kg"))
                         reps = set_data.get("reps")
+                        distance = self._convert_distance(set_data.get("distance_meters"))
                         sets_converted.append({
                             "type": set_data.get("type", "normal"),
                             "weight": weight,
                             "weight_unit": self._get_weight_unit(),
                             "reps": reps,
+                            "distance": distance,
+                            "distance_unit": self._get_distance_unit(),
                         })
                         if reps:
                             total_reps += reps
@@ -899,6 +1054,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "routine_data": self._detect_next_workout(),
                 "muscle_group_data": self._aggregate_muscle_groups(),
                 "weekly_muscle_volume": self._calculate_weekly_muscle_volume(),
+                "weekly_distance": self._calculate_weekly_distance(),
                 "workout_dates": workout_dates_sorted,
                 "workout_summaries": workout_summaries,
             }

@@ -5,6 +5,27 @@ All notable changes to the Hevy Workout Tracker integration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-12
+
+### Added
+- **Distance tracking for cardio exercises** (#5)
+  - Exercise sensors now expose `distance`, `distance_unit`, `personal_record_distance`, and `personal_record_distance_unit` attributes for exercises with distance data (running, biking, rowing, etc.)
+  - Distance PRs tracked per exercise (longest single-set distance)
+  - `best_set` display for distance exercises shows formatted distance (e.g., "3.1 mi" or "5.0 km in 25m 30s")
+  - Distance and distance_unit included in all set-level data (exercise summaries, workout summaries, per-exercise data)
+- **Weekly distance sensor** - `sensor.hevy_weekly_distance`
+  - State: total distance across all cardio exercises for the last 7 days
+  - `exercise_breakdown` attribute - per-exercise distance totals
+  - `distance_unit` attribute - mi (imperial) or km (metric)
+  - Excludes warmup sets from distance totals
+  - Follows same 7-day rolling window pattern as weekly muscle volume
+
+### Technical
+- New constants: `METERS_TO_MILES`, `METERS_TO_KM`, `SENSOR_WEEKLY_DISTANCE`
+- New coordinator methods: `_convert_distance()`, `_get_distance_unit()`, `_calculate_weekly_distance()`
+- Extended `_update_exercise_prs()` with distance PR tracking via `_exercise_distance_prs` dict
+- Extended `_get_best_set_string()` to format distance-based exercises
+
 ## [1.0.5] - 2026-03-10
 
 ### Fixed

@@ -22,6 +22,8 @@ DEFAULT_NAME = "Hevy"
 
 # Conversion
 KG_TO_LBS = 2.20462
+METERS_TO_MILES = 0.000621371
+METERS_TO_KM = 0.001
 
 # Sensor Types
 SENSOR_WORKOUT_COUNT = "workout_count"
@@ -33,6 +35,7 @@ BINARY_SENSOR_WORKED_OUT_TODAY = "worked_out_today"
 BINARY_SENSOR_WORKED_OUT_THIS_WEEK = "worked_out_this_week"
 SENSOR_MUSCLE_GROUP_SUMMARY = "muscle_group_summary"
 SENSOR_WEEKLY_MUSCLE_VOLUME = "weekly_muscle_volume"
+SENSOR_WEEKLY_DISTANCE = "weekly_distance"
 SENSOR_NEXT_WORKOUT = "next_workout"
 
 MUSCLE_DUE_THRESHOLD_DAYS = 3

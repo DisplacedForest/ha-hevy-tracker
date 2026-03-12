@@ -28,6 +28,7 @@ from .const import (
     SENSOR_LAST_WORKOUT_SUMMARY,
     SENSOR_MUSCLE_GROUP_SUMMARY,
     SENSOR_NEXT_WORKOUT,
+    SENSOR_WEEKLY_DISTANCE,
     SENSOR_WEEKLY_MUSCLE_VOLUME,
     SENSOR_WEEKLY_WORKOUT_COUNT,
     SENSOR_WORKOUT_COUNT,
@@ -62,6 +63,7 @@ async def async_setup_entry(
         HevyWorkedOutThisWeekBinarySensor(coordinator, entry),
         HevyMuscleGroupSummarySensor(coordinator, entry),
         HevyWeeklyMuscleVolumeSensor(coordinator, entry),
+        HevyWeeklyDistanceSensor(coordinator, entry),
         HevyNextWorkoutSensor(coordinator, entry),
     ]
 
@@ -455,6 +457,13 @@ class HevyExerciseSensor(CoordinatorEntity[HevyDataUpdateCoordinator], SensorEnt
         if exercise_data.get("total_duration_seconds") is not None:
             attrs["total_duration_seconds"] = exercise_data.get("total_duration_seconds")
 
+        # Add distance for cardio exercises
+        if exercise_data.get("total_distance") is not None:
+            attrs["distance"] = exercise_data.get("total_distance")
+            attrs["distance_unit"] = exercise_data.get("distance_unit")
+            attrs["personal_record_distance"] = exercise_data.get("personal_record_distance")
+            attrs["personal_record_distance_unit"] = exercise_data.get("personal_record_distance_unit")
+
         return attrs
 
 
@@ -530,6 +539,49 @@ class HevyWeeklyMuscleVolumeSensor(HevyBaseSensor):
             "exercise_breakdown": volume_data.get("exercise_breakdown", {}),
             "total_sets": volume_data.get("total_sets", 0),
             "total_workouts": volume_data.get("total_workouts", 0),
+        }
+
+
+class HevyWeeklyDistanceSensor(HevyBaseSensor):
+    """Sensor for weekly distance across cardio exercises."""
+
+    _attr_icon = "mdi:map-marker-distance"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: HevyDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, SENSOR_WEEKLY_DISTANCE)
+        self._attr_name = "Weekly distance"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return total distance across all exercises for the week."""
+        if not self.coordinator.data:
+            return None
+        distance_data = self.coordinator.data.get("weekly_distance", {})
+        return distance_data.get("total_distance", 0)
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return the unit of measurement."""
+        if not self.coordinator.data:
+            return None
+        distance_data = self.coordinator.data.get("weekly_distance", {})
+        return distance_data.get("distance_unit")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return distance breakdown attributes."""
+        if not self.coordinator.data:
+            return {}
+        distance_data = self.coordinator.data.get("weekly_distance", {})
+        return {
+            "period_start": distance_data.get("period_start"),
+            "period_end": distance_data.get("period_end"),
+            "exercise_breakdown": distance_data.get("exercise_breakdown", {}),
+            "distance_unit": distance_data.get("distance_unit"),
         }
 
 
