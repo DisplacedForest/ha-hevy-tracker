@@ -464,6 +464,11 @@ class HevyExerciseSensor(CoordinatorEntity[HevyDataUpdateCoordinator], SensorEnt
             attrs["personal_record_distance"] = exercise_data.get("personal_record_distance")
             attrs["personal_record_distance_unit"] = exercise_data.get("personal_record_distance_unit")
 
+        # Add weekly distance for cardio exercises
+        if exercise_data.get("weekly_distance") is not None:
+            attrs["weekly_distance"] = exercise_data.get("weekly_distance")
+            attrs["weekly_distance_unit"] = exercise_data.get("weekly_distance_unit")
+
         return attrs
 
 

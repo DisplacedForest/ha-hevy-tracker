@@ -943,6 +943,16 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "personal_record_distance_unit": self._get_distance_unit() if pr_distance else None,
                         }
 
+            # Inject weekly distance into per-exercise data
+            weekly_distance_data = self._calculate_weekly_distance()
+            exercise_breakdown = weekly_distance_data.get("exercise_breakdown", {})
+            distance_unit = weekly_distance_data.get("distance_unit")
+            for title, weekly_dist in exercise_breakdown.items():
+                key = title.lower()
+                if key in exercise_data:
+                    exercise_data[key]["weekly_distance"] = weekly_dist
+                    exercise_data[key]["weekly_distance_unit"] = distance_unit
+
             # Build deduplicated, sorted list of workout dates (YYYY-MM-DD)
             workout_dates = set()
             for workout in workouts:
@@ -1054,7 +1064,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "routine_data": self._detect_next_workout(),
                 "muscle_group_data": self._aggregate_muscle_groups(),
                 "weekly_muscle_volume": self._calculate_weekly_muscle_volume(),
-                "weekly_distance": self._calculate_weekly_distance(),
+                "weekly_distance": weekly_distance_data,
                 "workout_dates": workout_dates_sorted,
                 "workout_summaries": workout_summaries,
             }

@@ -5,6 +5,14 @@ All notable changes to the Hevy Workout Tracker integration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-03-14
+
+### Added
+- **Per-exercise weekly distance** - Cardio exercise sensors now expose `weekly_distance` and `weekly_distance_unit` attributes showing 7-day rolling distance totals per exercise (e.g., 10 mi biking, 6 mi running — separately)
+
+### Changed
+- Reuse computed weekly distance data instead of calling `_calculate_weekly_distance()` twice per update cycle
+
 ## [1.1.0] - 2026-03-12
 
 ### Added
