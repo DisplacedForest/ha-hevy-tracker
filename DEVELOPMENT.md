@@ -40,6 +40,7 @@ You should see:
 - `sensor.hevy_current_streak`
 - `sensor.hevy_muscle_group_summary`
 - `sensor.hevy_weekly_muscle_volume`
+- `sensor.hevy_weekly_distance`
 - `sensor.hevy_next_workout`
 - `binary_sensor.hevy_worked_out_today`
 - `binary_sensor.hevy_worked_out_this_week`
@@ -53,16 +54,11 @@ You should see:
 mypy custom_components/hevy
 ```
 
-### Linting
+### Linting & Formatting
 
 ```bash
-pylint custom_components/hevy
-```
-
-### Formatting
-
-```bash
-black custom_components/hevy
+ruff check custom_components/hevy
+ruff format custom_components/hevy
 ```
 
 ## API Testing
