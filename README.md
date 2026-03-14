@@ -506,7 +506,7 @@ styles:
     - padding: 18px
     - margin-top: 8px
   grid:
-    - grid-template-areas: "\"prs\""
+    - grid-template-areas: '"prs"'
     - grid-template-columns: 1fr
   custom_fields:
     prs:
