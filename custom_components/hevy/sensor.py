@@ -6,10 +6,7 @@ import hashlib
 import logging
 from typing import Any
 
-from homeassistant.components.binary_sensor import (
-    BinarySensorEntity,
-    BinarySensorDeviceClass,
-)
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,

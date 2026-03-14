@@ -20,6 +20,13 @@ jobs:
         with:
           category: "integration"
 
+  lint:
+    runs-on: "ubuntu-latest"
+    name: Lint with Ruff
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "astral-sh/ruff-action@v3"
+
   validate-hassfest:
     runs-on: "ubuntu-latest"
     name: Validate with Hassfest
