@@ -456,7 +456,9 @@ custom_fields:
       return (function() {
         var exercises = Object.keys(states).filter(function(e) {
           return e.startsWith('sensor.hevy_workout_tracker_') &&
-                 states[e].attributes.personal_record_weight !== undefined;
+                 (states[e].attributes.personal_record_weight !== undefined ||
+                  states[e].attributes.personal_record_distance !== undefined
+                 );
         });
         var fmt = function(n) { return n.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); };
         var h = '<div>';
@@ -477,12 +479,15 @@ custom_fields:
           name = name.replace('Hevy Workout Tracker ', '');
           var prW = s.attributes.personal_record_weight;
           var prR = s.attributes.personal_record_reps;
-          var unit = s.attributes.weight_unit || 'lbs';
+          var unitW = s.attributes.weight_unit || 'lbs';
+          var prD = s.attributes.personal_record_distance;
+          var unitD = s.attributes.distance_unit || 'mi';
           var group = s.attributes.muscle_group || '';
           var groupLabel = group ? fmt(group) : '';
           var prStr = '';
-          if (prW != null && prR != null) prStr = prW + ' ' + unit + ' x ' + prR;
-          else if (prW != null) prStr = prW + ' ' + unit;
+          if (prW != null && prR != null) prStr = prW + ' ' + unitW + ' x ' + prR;
+          else if (prW != null) prStr = prW + ' ' + unitW;
+          else if (prD != null) prStr = prD + ' ' + unitD;
           else return;
           h += '<div style="background:#2B3035;border-radius:10px;padding:10px 12px;text-align:center;">';
           h += '<div style="color:#F8F9FA;font-size:12px;font-weight:600;margin-bottom:2px;">' + name + '</div>';
