@@ -367,6 +367,78 @@ styles:
 </details>
 
 <details>
+<summary><b>Weekly Distance Grid</b></summary>
+
+![Weekly Volume](docs/screenshots/weekly-distance.png)
+
+```yaml
+type: custom:button-card
+entity: sensor.hevy_workout_tracker_workout_count
+show_name: false
+show_state: false
+show_icon: false
+show_label: false
+tap_action:
+  action: none
+custom_fields:
+  prs: |
+    [[[
+      return (function() {
+        var exercises = Object.keys(states).filter(function(e) {
+          return e.startsWith('sensor.hevy_workout_tracker_') &&
+                 states[e].attributes.weekly_distance !== undefined ;
+        });
+        var fmt = function(n) { return n.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); };
+        var h = '<div>';
+        h += '<div style="color:#ADB5BD;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Weekly Distance</div>';
+        if (!exercises.length) {
+          h += '<div style="color:#6C757D;font-size:13px;">No PR data yet</div></div>';
+          return h;
+        }
+        h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+        exercises.sort(function(a, b) {
+          var ga = (states[a].attributes.muscle_group || 'zzz');
+          var gb = (states[b].attributes.muscle_group || 'zzz');
+          return ga.localeCompare(gb);
+        });
+        exercises.forEach(function(eid) {
+          var s = states[eid];
+          var name = s.attributes.friendly_name || eid;
+          name = name.replace('Hevy Workout Tracker ', '');
+          var prD = s.attributes.weekly_distance;
+          var unitD = s.attributes.distance_unit || 'mi';
+          var group = s.attributes.muscle_group || '';
+          var groupLabel = group ? fmt(group) : '';
+          var prStr = '';
+          prStr = prD + ' ' + unitD;
+          h += '<div style="background:#2B3035;border-radius:10px;padding:10px 12px;text-align:center;">';
+          h += '<div style="color:#F8F9FA;font-size:12px;font-weight:600;margin-bottom:2px;">' + name + '</div>';
+          h += '<div style="color:#4ECDC4;font-size:13px;font-weight:700;margin-bottom:2px;">' + prStr + '</div>';
+          if (groupLabel) h += '<div style="color:#6C757D;font-size:10px;">' + groupLabel + '</div>';
+          h += '</div>';
+        });
+        h += '</div></div>';
+        return h;
+      })();
+    ]]]
+styles:
+  card:
+    - background: "#343A40"
+    - border-radius: 12px
+    - padding: 18px
+    - margin-top: 8px
+  grid:
+    - grid-template-areas: "\"prs\""
+    - grid-template-columns: 1fr
+  custom_fields:
+    prs:
+      - white-space: normal
+```
+
+</details>
+
+
+<details>
 <summary><b>Muscle Recovery Grid</b></summary>
 
 ![Muscle Recovery](docs/screenshots/muscle-recovery.png)
