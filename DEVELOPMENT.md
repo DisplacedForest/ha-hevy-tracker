@@ -67,10 +67,13 @@ Install the test dependencies (includes a pinned Home Assistant, pytest, and the
 custom-component test harness), then run pytest from the repo root:
 
 ```bash
-python3 -m venv .venv
+python3.14 -m venv .venv
 .venv/bin/pip install -r requirements-test.txt
 .venv/bin/pytest
 ```
+
+The test harness tracks current Home Assistant, which requires Python 3.14
+(`brew install python@3.14` on macOS).
 
 Tests live in `tests/` and run in CI (`.github/workflows/ci.yml`) on every push
 and pull request. New features should ship with tests.
