@@ -61,6 +61,20 @@ ruff check custom_components/hevy
 ruff format custom_components/hevy
 ```
 
+### Running Tests
+
+Install the test dependencies (includes a pinned Home Assistant, pytest, and the
+custom-component test harness), then run pytest from the repo root:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-test.txt
+.venv/bin/pytest
+```
+
+Tests live in `tests/` and run in CI (`.github/workflows/ci.yml`) on every push
+and pull request. New features should ship with tests.
+
 ## API Testing
 
 ### Manual API Testing

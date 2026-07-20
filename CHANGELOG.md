@@ -5,6 +5,13 @@ All notable changes to the Hevy Workout Tracker integration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Automated test suite (`tests/`) built on `pytest-homeassistant-custom-component`, covering coordinator unit conversions, PR tracking, streak calculation, workout pagination, and full config entry setup/unload
+- CI workflow (`.github/workflows/ci.yml`) running ruff lint and pytest on every push and pull request
+- Dependabot updates for pip test dependencies
+
 ## [1.1.1] - 2026-03-14
 
 ### Added
