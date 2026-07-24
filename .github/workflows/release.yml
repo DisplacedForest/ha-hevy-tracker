@@ -18,6 +18,21 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Check manifest version matches tag
+        run: |
+          manifest=$(jq -r .version custom_components/hevy/manifest.json)
+          if [ "$manifest" != "${{ steps.version.outputs.version }}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match manifest version ${manifest}. Bump manifest.json before tagging."
+            exit 1
+          fi
+
+      - name: Check changelog has entry for version
+        run: |
+          if ! grep -q "^## \[${{ steps.version.outputs.version }}\]" CHANGELOG.md; then
+            echo "CHANGELOG.md has no entry for ${{ steps.version.outputs.version }}."
+            exit 1
+          fi
+
       - name: Extract release notes from CHANGELOG
         id: notes
         run: |

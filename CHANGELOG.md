@@ -5,6 +5,15 @@ All notable changes to the Hevy Workout Tracker integration will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Issue templates for bug reports and feature requests
+- Pull request template with a tests, changelog, and docs checklist
+- CODEOWNERS so pull requests automatically request maintainer review
+- Path-based PR labeling (documentation, tests, ci, integration)
+- Release workflow guards: a release now fails if the tag does not match `manifest.json` or `CHANGELOG.md` has no entry for the version
+
 ## [1.2.0] - 2026-07-24
 
 ### Added

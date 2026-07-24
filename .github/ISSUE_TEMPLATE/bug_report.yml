@@ -1,0 +1,40 @@
+name: Bug report
+description: Something isn't working with the integration
+labels: ["bug"]
+body:
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.7.1"
+    validations:
+      required: true
+  - type: input
+    id: integration-version
+    attributes:
+      label: Integration version
+      description: Found under Settings > Devices & Services > Hevy Workout Tracker, or in HACS
+      placeholder: "1.2.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug logs
+      description: |
+        Enable debug logging under Settings > Devices & Services > Hevy Workout Tracker > Enable debug logging, reproduce the issue, then paste the relevant log lines here. Remove your API key if it appears anywhere.
+      render: text
