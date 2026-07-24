@@ -1,0 +1,17 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: "tests/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+integration:
+  - changed-files:
+      - any-glob-to-any-file: "custom_components/**"
