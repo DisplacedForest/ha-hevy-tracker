@@ -1,8 +1,8 @@
 """Data Update Coordinator for Hevy integration."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -94,7 +94,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info(
                 "Cached %d exercise templates from %d pages", total_templates, page
             )
-        except Exception as err:
+        except HevyApiError as err:
             _LOGGER.warning("Failed to fetch exercise templates: %s", err)
 
     async def fetch_routines(self) -> None:
@@ -117,7 +117,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "exercises": exercises,
                     })
             _LOGGER.info("Cached %d routines", len(self._routines))
-        except Exception as err:
+        except HevyApiError as err:
             _LOGGER.warning("Failed to fetch routines: %s", err)
 
     async def _fetch_30_day_workouts(self) -> list[dict[str, Any]]:
@@ -264,9 +264,11 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 primary = template.get("muscle_group")
                 secondaries = template.get("secondary_muscle_groups", [])
 
-                if primary:
-                    if primary not in muscle_last_trained or workout_dt > muscle_last_trained[primary]:
-                        muscle_last_trained[primary] = workout_dt
+                if primary and (
+                    primary not in muscle_last_trained
+                    or workout_dt > muscle_last_trained[primary]
+                ):
+                    muscle_last_trained[primary] = workout_dt
                 for sec in secondaries:
                     if sec not in muscle_last_trained or workout_dt > muscle_last_trained[sec]:
                         muscle_last_trained[sec] = workout_dt
@@ -667,17 +669,15 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                     # Track PR for distance exercises (store in meters)
                     distance_meters = set_data.get("distance_meters")
-                    if distance_meters is not None:
-                        if exercise_title not in self._exercise_distance_prs:
-                            self._exercise_distance_prs[exercise_title] = {
-                                "distance_meters": distance_meters,
-                                "template_id": template_id,
-                            }
-                        elif distance_meters > self._exercise_distance_prs[exercise_title]["distance_meters"]:
-                            self._exercise_distance_prs[exercise_title] = {
-                                "distance_meters": distance_meters,
-                                "template_id": template_id,
-                            }
+                    if distance_meters is not None and (
+                        exercise_title not in self._exercise_distance_prs
+                        or distance_meters
+                        > self._exercise_distance_prs[exercise_title]["distance_meters"]
+                    ):
+                        self._exercise_distance_prs[exercise_title] = {
+                            "distance_meters": distance_meters,
+                            "template_id": template_id,
+                        }
 
     def _calculate_current_streak(self, workouts: list[dict[str, Any]]) -> int:
         """Calculate current workout streak (consecutive days with workouts).
