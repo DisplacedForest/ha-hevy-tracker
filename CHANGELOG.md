@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow (`.github/workflows/ci.yml`) running ruff lint and pytest on every push and pull request
 - Dependabot updates for pip test dependencies
 
+### Changed
+- Code cleanup for ruff 0.16.0 (import sorting, `Self` return type on `__aenter__`, narrowed exception handling in coordinator fetches, simplified conditionals)
+- Validate workflow now reads its ruff version from `requirements-test.txt` so both CI workflows lint with the same pinned version
+
 ## [1.1.1] - 2026-03-14
 
 ### Added

@@ -26,6 +26,8 @@ jobs:
     steps:
       - uses: "actions/checkout@v7"
       - uses: "astral-sh/ruff-action@v3"
+        with:
+          version-file: "requirements-test.txt"
 
   validate-hassfest:
     runs-on: "ubuntu-latest"
