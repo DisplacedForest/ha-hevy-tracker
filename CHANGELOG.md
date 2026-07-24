@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code cleanup for ruff 0.16.0 (import sorting, `Self` return type on `__aenter__`, narrowed exception handling in coordinator fetches, simplified conditionals)
 - Validate workflow now reads its ruff version from `requirements-test.txt` so both CI workflows lint with the same pinned version
 
+## [1.1.2] - 2026-03-16
+
+### Added
+- Weekly distance grid example dashboard card in the README
+- Ruff linting in the Validate workflow
+- Dependabot updates for GitHub Actions
+
+### Changed
+- Bumped actions/checkout to v6 for Node.js 24 compatibility
+
 ## [1.1.1] - 2026-03-14
 
 ### Added
