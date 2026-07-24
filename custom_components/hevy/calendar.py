@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import hashlib
-import logging
 from typing import Any
 
 from homeassistant.components.calendar import (
@@ -19,8 +18,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import CONF_API_KEY, DOMAIN
 from .coordinator import HevyDataUpdateCoordinator
 from .sensor import get_device_info
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -42,11 +39,18 @@ def _parse_dt(date_str: str | None) -> datetime | None:
         return None
 
 
-def _build_event_description(workout: dict[str, Any]) -> str | None:
+def _build_event_description(
+    workout: dict[str, Any],
+    coordinator: HevyDataUpdateCoordinator,
+) -> str | None:
     """Build a human-readable description from workout exercise data.
+
+    Uses the coordinator's unit conversion so volume matches the
+    configured unit system (imperial or metric).
 
     Args:
         workout: Raw workout dict from the Hevy API
+        coordinator: Coordinator with unit system config
 
     Returns:
         Formatted description string, or None if no exercises
@@ -55,6 +59,7 @@ def _build_event_description(workout: dict[str, Any]) -> str | None:
     if not exercises:
         return None
 
+    unit = coordinator._get_weight_unit()
     lines: list[str] = []
     for exercise in exercises:
         title = exercise.get("title", "Unknown")
@@ -68,12 +73,14 @@ def _build_event_description(workout: dict[str, Any]) -> str | None:
             weight_kg = s.get("weight_kg")
             reps = s.get("reps")
             if weight_kg is not None and reps is not None:
-                total_volume += weight_kg * reps
-                has_weight = True
+                converted = coordinator._convert_weight(weight_kg)
+                if converted is not None:
+                    total_volume += converted * reps
+                    has_weight = True
 
         if has_weight and total_volume > 0:
             lines.append(
-                f"{title}: {set_count} sets, {round(total_volume, 1)} kg volume"
+                f"{title}: {set_count} sets, {round(total_volume, 1)} {unit} volume"
             )
         else:
             lines.append(f"{title}: {set_count} sets")
@@ -81,11 +88,15 @@ def _build_event_description(workout: dict[str, Any]) -> str | None:
     return "\n".join(lines)
 
 
-def _workout_to_event(workout: dict[str, Any]) -> CalendarEvent | None:
+def _workout_to_event(
+    workout: dict[str, Any],
+    coordinator: HevyDataUpdateCoordinator,
+) -> CalendarEvent | None:
     """Convert a raw Hevy workout dict to a CalendarEvent.
 
     Args:
         workout: Raw workout dict from the Hevy API
+        coordinator: Coordinator with unit system config
 
     Returns:
         CalendarEvent instance, or None if start_time is missing or invalid
@@ -99,7 +110,7 @@ def _workout_to_event(workout: dict[str, Any]) -> CalendarEvent | None:
         end_dt = start_dt + timedelta(hours=1)
 
     title = workout.get("title") or "Workout"
-    description = _build_event_description(workout)
+    description = _build_event_description(workout, coordinator)
 
     return CalendarEvent(
         start=start_dt,
@@ -168,7 +179,7 @@ class HevyCalendarEntity(CoordinatorEntity[HevyDataUpdateCoordinator], CalendarE
             return None
 
         # Workouts are sorted most-recent-first
-        return _workout_to_event(workouts[0])
+        return _workout_to_event(workouts[0], self.coordinator)
 
     async def async_get_events(
         self,
@@ -176,10 +187,9 @@ class HevyCalendarEntity(CoordinatorEntity[HevyDataUpdateCoordinator], CalendarE
         start_date: datetime,
         end_date: datetime,
     ) -> list[CalendarEvent]:
-        """Return workout events within the given date range.
+        """Return workout events that overlap the given date range.
 
-        Called by HA when the calendar view queries for events, or when
-        external CalDAV clients request a sync.
+        Called by HA when the calendar view queries for events.
 
         Args:
             hass: Home Assistant instance
@@ -196,14 +206,11 @@ class HevyCalendarEntity(CoordinatorEntity[HevyDataUpdateCoordinator], CalendarE
 
         events: list[CalendarEvent] = []
         for workout in workouts:
-            start_dt = _parse_dt(workout.get("start_time"))
-            if start_dt is None:
+            event = _workout_to_event(workout, self.coordinator)
+            if event is None:
                 continue
-            # Filter to the requested range
-            if start_dt < start_date or start_dt >= end_date:
-                continue
-            event = _workout_to_event(workout)
-            if event is not None:
+            # Include events that overlap the requested range
+            if event.end > start_date and event.start < end_date:
                 events.append(event)
 
         events.sort(key=lambda e: e.start)

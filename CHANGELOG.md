@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow (`.github/workflows/ci.yml`) running ruff lint and pytest on every push and pull request
 - Dependabot updates for pip test dependencies
 
+## [Unreleased]
+
+### Added
+- **Calendar entity** — Completed workouts now appear as calendar events in Home Assistant's calendar view, with exercise details and volume in the event description. Workouts are displayed as a training history; calendar trigger automations will not fire since workouts are logged after the fact
+
 ## [1.1.1] - 2026-03-14
 
 ### Added

@@ -64,6 +64,7 @@ Access via **Devices & Services** → **Hevy Workout Tracker** → **Configure**
 - **Routine Rotation** — Automatically detects the next workout in your A/B/C rotation
 - **30-Day History** — Service call for full workout history with enriched data
 - **Automatic Updates** — Configurable polling interval (5–120 minutes)
+- **Calendar Entity** — Completed workouts appear on the HA calendar with exercise details, volume, and duration. This is a history view (workouts are logged after the fact), not an automation trigger source
 - **Unit Support** — Imperial (lbs) or metric (kg)
 
 ---

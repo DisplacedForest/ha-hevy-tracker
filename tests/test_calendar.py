@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.hevy.const import UNIT_SYSTEM_METRIC, UNIT_SYSTEM_IMPERIAL
 from custom_components.hevy.calendar import (
     HevyCalendarEntity,
     _build_event_description,
@@ -24,6 +25,28 @@ def mock_entry() -> MagicMock:
     entry = MagicMock()
     entry.data = {"api_key": "test_key_123"}
     return entry
+
+
+@pytest.fixture
+def coordinator_imperial() -> MagicMock:
+    """Return a mock coordinator with imperial unit system."""
+    coord = MagicMock()
+    coord.unit_system = UNIT_SYSTEM_IMPERIAL
+    coord._get_weight_unit.return_value = "lbs"
+    # Imperial: 60 kg -> 132.5 lbs (60 * 2.20462 = 132.2772, rounded to 132.5)
+    coord._convert_weight.side_effect = lambda kg: round(kg * 2.20462 * 2) / 2 if kg is not None else None
+    return coord
+
+
+@pytest.fixture
+def coordinator_metric() -> MagicMock:
+    """Return a mock coordinator with metric unit system."""
+    coord = MagicMock()
+    coord.unit_system = UNIT_SYSTEM_METRIC
+    coord._get_weight_unit.return_value = "kg"
+    # Metric: round kg to nearest 0.5
+    coord._convert_weight.side_effect = lambda kg: round(kg * 2) / 2 if kg is not None else None
+    return coord
 
 
 @pytest.fixture
@@ -75,11 +98,11 @@ def sample_workouts() -> list[dict]:
 @pytest.fixture
 def coordinator_with_data(
     sample_workouts: list[dict],
+    coordinator_imperial: MagicMock,
 ) -> MagicMock:
     """Return a mock coordinator populated with sample workouts."""
-    coord = MagicMock()
-    coord.data = {"workouts": sample_workouts}
-    return coord
+    coordinator_imperial.data = {"workouts": sample_workouts}
+    return coordinator_imperial
 
 
 @pytest.fixture
@@ -123,7 +146,9 @@ class TestParseDt:
 class TestBuildEventDescription:
     """Tests for _build_event_description."""
 
-    def test_weighted_exercises(self) -> None:
+    def test_weighted_exercises_imperial(
+        self, coordinator_imperial: MagicMock
+    ) -> None:
         workout = {
             "exercises": [
                 {
@@ -135,28 +160,55 @@ class TestBuildEventDescription:
                 },
             ],
         }
-        desc = _build_event_description(workout)
+        desc = _build_event_description(workout, coordinator_imperial)
         assert desc is not None
         assert "Bench Press" in desc
-        assert "1080.0 kg volume" in desc  # 60*10 + 60*8
+        # 60kg -> 132.5 lbs; 132.5 * 10 + 132.5 * 8 = 2385.0
+        assert "2385.0 lbs volume" in desc
 
-    def test_bodyweight_exercises(self) -> None:
+    def test_weighted_exercises_metric(
+        self, coordinator_metric: MagicMock
+    ) -> None:
+        workout = {
+            "exercises": [
+                {
+                    "title": "Bench Press",
+                    "sets": [
+                        {"weight_kg": 60, "reps": 10},
+                        {"weight_kg": 60, "reps": 8},
+                    ],
+                },
+            ],
+        }
+        desc = _build_event_description(workout, coordinator_metric)
+        assert desc is not None
+        assert "Bench Press" in desc
+        # 60kg rounded to 60.0; 60.0 * 10 + 60.0 * 8 = 1080.0
+        assert "1080.0 kg volume" in desc
+
+    def test_bodyweight_exercises(
+        self, coordinator_imperial: MagicMock
+    ) -> None:
         workout = {
             "exercises": [
                 {"title": "Push-ups", "sets": [{"weight_kg": None, "reps": 20}]},
             ],
         }
-        desc = _build_event_description(workout)
+        desc = _build_event_description(workout, coordinator_imperial)
         assert desc is not None
         assert "Push-ups" in desc
         assert "1 sets" in desc
-        assert "kg volume" not in desc
+        assert "lbs volume" not in desc
 
-    def test_empty_exercises(self) -> None:
-        assert _build_event_description({"exercises": []}) is None
+    def test_empty_exercises(
+        self, coordinator_imperial: MagicMock
+    ) -> None:
+        assert _build_event_description({"exercises": []}, coordinator_imperial) is None
 
-    def test_no_exercises_key(self) -> None:
-        assert _build_event_description({}) is None
+    def test_no_exercises_key(
+        self, coordinator_imperial: MagicMock
+    ) -> None:
+        assert _build_event_description({}, coordinator_imperial) is None
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +218,7 @@ class TestBuildEventDescription:
 class TestWorkoutToEvent:
     """Tests for _workout_to_event."""
 
-    def test_full_workout(self) -> None:
+    def test_full_workout(self, coordinator_imperial: MagicMock) -> None:
         workout = {
             "id": "abc123",
             "title": "Push Day",
@@ -176,7 +228,7 @@ class TestWorkoutToEvent:
                 {"title": "Bench Press", "sets": [{"weight_kg": 60, "reps": 10}]},
             ],
         }
-        event = _workout_to_event(workout)
+        event = _workout_to_event(workout, coordinator_imperial)
         assert event is not None
         assert event.summary == "Push Day"
         assert event.start.year == 2026
@@ -185,28 +237,36 @@ class TestWorkoutToEvent:
         assert event.description is not None
         assert "Bench Press" in event.description
 
-    def test_missing_end_time_defaults_to_1hr(self) -> None:
+    def test_missing_end_time_defaults_to_1hr(
+        self, coordinator_imperial: MagicMock
+    ) -> None:
         workout = {
             "id": "xyz",
             "title": "Leg Day",
             "start_time": "2026-07-15T08:00:00Z",
         }
-        event = _workout_to_event(workout)
+        event = _workout_to_event(workout, coordinator_imperial)
         assert event is not None
         duration = event.end - event.start
         assert duration == timedelta(hours=1)
 
-    def test_missing_start_time(self) -> None:
-        assert _workout_to_event({"title": "No Time"}) is None
+    def test_missing_start_time(
+        self, coordinator_imperial: MagicMock
+    ) -> None:
+        assert _workout_to_event({"title": "No Time"}, coordinator_imperial) is None
 
-    def test_fallback_title(self) -> None:
+    def test_fallback_title(
+        self, coordinator_imperial: MagicMock
+    ) -> None:
         workout = {"start_time": "2026-07-17T10:30:00Z"}
-        event = _workout_to_event(workout)
+        event = _workout_to_event(workout, coordinator_imperial)
         assert event is not None
         assert event.summary == "Workout"
 
-    def test_invalid_start_time(self) -> None:
-        assert _workout_to_event({"start_time": "bad"}) is None
+    def test_invalid_start_time(
+        self, coordinator_imperial: MagicMock
+    ) -> None:
+        assert _workout_to_event({"start_time": "bad"}, coordinator_imperial) is None
 
 
 # ---------------------------------------------------------------------------
@@ -224,16 +284,14 @@ class TestHevyCalendarEntityEvent:
         assert event.summary == "Push Day"
         assert event.uid == "w1"
 
-    def test_event_no_data(self, mock_entry: MagicMock) -> None:
-        coord = MagicMock()
-        coord.data = None
-        entity = HevyCalendarEntity(coord, mock_entry)
+    def test_event_no_data(self, mock_entry: MagicMock, coordinator_imperial: MagicMock) -> None:
+        coordinator_imperial.data = None
+        entity = HevyCalendarEntity(coordinator_imperial, mock_entry)
         assert entity.event is None
 
-    def test_event_empty_workouts(self, mock_entry: MagicMock) -> None:
-        coord = MagicMock()
-        coord.data = {"workouts": []}
-        entity = HevyCalendarEntity(coord, mock_entry)
+    def test_event_empty_workouts(self, mock_entry: MagicMock, coordinator_imperial: MagicMock) -> None:
+        coordinator_imperial.data = {"workouts": []}
+        entity = HevyCalendarEntity(coordinator_imperial, mock_entry)
         assert entity.event is None
 
 
@@ -264,6 +322,29 @@ class TestHevyCalendarEntityGetEvents:
         assert len(events) == 1
         assert events[0].summary == "Pull Day"
 
+    async def test_get_events_overlap_includes_crossing_event(
+        self, mock_entry: MagicMock, coordinator_imperial: MagicMock
+    ) -> None:
+        """An event that starts before the range but ends inside it should be included."""
+        workouts = [
+            {
+                "id": "crossing",
+                "title": "Late Night Workout",
+                "start_time": "2026-07-13T23:00:00Z",
+                "end_time": "2026-07-14T01:00:00Z",
+                "exercises": [],
+            },
+        ]
+        coordinator_imperial.data = {"workouts": workouts}
+        entity = HevyCalendarEntity(coordinator_imperial, mock_entry)
+        events = await entity.async_get_events(
+            None,
+            datetime(2026, 7, 14, tzinfo=timezone.utc),
+            datetime(2026, 7, 16, tzinfo=timezone.utc),
+        )
+        assert len(events) == 1
+        assert events[0].summary == "Late Night Workout"
+
     async def test_get_events_empty_range(
         self, entity: HevyCalendarEntity
     ) -> None:
@@ -274,10 +355,9 @@ class TestHevyCalendarEntityGetEvents:
         )
         assert len(events) == 0
 
-    async def test_get_events_no_data(self, mock_entry: MagicMock) -> None:
-        coord = MagicMock()
-        coord.data = None
-        entity = HevyCalendarEntity(coord, mock_entry)
+    async def test_get_events_no_data(self, mock_entry: MagicMock, coordinator_imperial: MagicMock) -> None:
+        coordinator_imperial.data = None
+        entity = HevyCalendarEntity(coordinator_imperial, mock_entry)
         events = await entity.async_get_events(
             None,
             datetime(2026, 7, 1, tzinfo=timezone.utc),
@@ -286,7 +366,7 @@ class TestHevyCalendarEntityGetEvents:
         assert len(events) == 0
 
     async def test_get_events_skips_missing_start_time(
-        self, mock_entry: MagicMock
+        self, mock_entry: MagicMock, coordinator_imperial: MagicMock
     ) -> None:
         workouts = [
             {"id": "bad", "title": "No Time", "exercises": []},
@@ -298,9 +378,8 @@ class TestHevyCalendarEntityGetEvents:
                 "exercises": [],
             },
         ]
-        coord = MagicMock()
-        coord.data = {"workouts": workouts}
-        entity = HevyCalendarEntity(coord, mock_entry)
+        coordinator_imperial.data = {"workouts": workouts}
+        entity = HevyCalendarEntity(coordinator_imperial, mock_entry)
         events = await entity.async_get_events(
             None,
             datetime(2026, 1, 1, tzinfo=timezone.utc),
