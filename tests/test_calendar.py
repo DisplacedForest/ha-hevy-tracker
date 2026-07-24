@@ -6,14 +6,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.hevy.const import UNIT_SYSTEM_METRIC, UNIT_SYSTEM_IMPERIAL
 from custom_components.hevy.calendar import (
     HevyCalendarEntity,
     _build_event_description,
     _parse_dt,
     _workout_to_event,
 )
-
+from custom_components.hevy.const import UNIT_SYSTEM_IMPERIAL, UNIT_SYSTEM_METRIC
 
 # ---------------------------------------------------------------------------
 # Fixtures
