@@ -1,9 +1,9 @@
 """Sensor platform for Hevy Workout Tracker."""
 from __future__ import annotations
 
-from datetime import datetime
 import hashlib
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
@@ -67,7 +67,7 @@ async def async_setup_entry(
     # Create per-exercise sensors dynamically
     if coordinator.data:
         exercise_data = coordinator.data.get("exercise_data", {})
-        for exercise_key, exercise_info in exercise_data.items():
+        for exercise_key in exercise_data:
             entities.append(HevyExerciseSensor(coordinator, entry, exercise_key))
 
     # Seed tracking set with initial exercises

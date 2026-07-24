@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Self
 
 import aiohttp
 
@@ -34,13 +34,13 @@ class HevyApiClient:
         self._session = session
         self._own_session = session is None
 
-    async def __aenter__(self) -> HevyApiClient:
+    async def __aenter__(self) -> Self:
         """Async enter."""
         if self._own_session:
             self._session = aiohttp.ClientSession()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         """Async exit."""
         if self._own_session and self._session:
             await self._session.close()
