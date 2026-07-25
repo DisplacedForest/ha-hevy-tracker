@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Path-based PR labeling (documentation, tests, ci, integration)
 - Release workflow guards: a release now fails if the tag does not match `manifest.json` or `CHANGELOG.md` has no entry for the version
 
+### Changed
+- Bumped actions/labeler to v7 for Node.js 24 compatibility
+
 ## [1.2.0] - 2026-07-24
 
 ### Added
