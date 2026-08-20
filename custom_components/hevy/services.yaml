@@ -22,7 +22,7 @@ get_workout_history:
 
 log_workout:
   name: Log workout
-  description: Posts a completed workout to Hevy with full exercise and set detail. Hevy has no delete, so logged workouts are permanent.
+  description: Posts a completed workout to Hevy with full exercise and set detail. Mistaken logs can only be deleted in the Hevy mobile app.
   fields:
     config_entry_id:
       name: Config entry ID

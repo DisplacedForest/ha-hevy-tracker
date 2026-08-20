@@ -737,7 +737,7 @@ action:
 
 Posts a completed workout to Hevy. Exercise names are matched against your Hevy exercise catalog (exact first, then case-insensitive), and weights and distances are sent in the unit system configured for the integration. If any exercise name cannot be matched, nothing is posted and the error lists the closest names.
 
-> **Warning:** Hevy has no way to delete a workout, in the app or the API. Anything this service logs is permanent. Workouts can be edited afterward but never removed, so give any dashboard button that calls this service a confirmation step.
+> **Warning:** The Hevy API has no delete, and the web app doesn't either. A mistakenly logged workout can only be removed in the Hevy mobile app, so give any dashboard button that calls this service a confirmation step.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
