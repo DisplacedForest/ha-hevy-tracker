@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-20
+
 ### Added
 - `hevy.log_workout` service that posts a completed workout to Hevy. Exercise names are resolved against the cached exercise catalog, weights and distances are converted from your configured unit system, and the service returns the new workout ID and title
 - Issue templates for bug reports and feature requests
