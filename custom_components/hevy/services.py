@@ -347,6 +347,8 @@ def async_register_services(hass: HomeAssistant) -> None:
         await coordinator.async_request_refresh()
 
         result = created.get("workout", created) if created else {}
+        if isinstance(result, list):
+            result = result[0] if result else {}
         _LOGGER.debug("Logged workout %s", result.get("id"))
 
         return {

@@ -325,6 +325,15 @@ class TestResponseAndErrors:
         response = await _log(hass)
         assert response == {"workout_id": "w-9", "title": "Leg Day"}
 
+    async def test_handles_list_workout_response(
+        self, hass, imperial_setup
+    ) -> None:
+        imperial_setup.client.create_workout = AsyncMock(
+            return_value={"workout": [{"id": "w-7", "title": "Pull Day"}]}
+        )
+        response = await _log(hass)
+        assert response == {"workout_id": "w-7", "title": "Pull Day"}
+
     async def test_refresh_requested_after_success(
         self, hass, imperial_setup
     ) -> None:
