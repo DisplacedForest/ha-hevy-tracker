@@ -50,6 +50,7 @@ class HevyApiClient:
         method: str,
         endpoint: str,
         params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Make an API request.
 
@@ -74,7 +75,7 @@ class HevyApiClient:
         try:
             async with asyncio.timeout(API_TIMEOUT):
                 async with self._session.request(
-                    method, url, headers=headers, params=params
+                    method, url, headers=headers, params=params, json=json
                 ) as response:
                     if response.status == 401:
                         raise HevyAuthError("Invalid API key")
@@ -135,6 +136,9 @@ class HevyApiClient:
         """
         params = {"page": page, "pageSize": page_size}
         return await self._request("GET", "/workouts", params=params)
+
+    async def create_workout(self, workout: dict[str, Any]) -> dict[str, Any]:
+        return await self._request("POST", "/workouts", json=workout)
 
     async def get_workout_events(
         self, page: int = 1, page_size: int = 10

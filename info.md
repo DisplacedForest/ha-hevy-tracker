@@ -6,14 +6,15 @@ Track your [Hevy](https://www.hevyapp.com/) workouts in Home Assistant with rich
 
 ## Features
 
-- **Summary sensors** — workout count, streaks, weekly activity, and worked out today/this week
-- **Per-exercise sensors** — automatically created for each exercise, with personal records and full set history
-- **Muscle group tracking** — which muscles were hit, days since last trained, and which are due
-- **Weekly volume analysis** — volume per muscle group with exercise breakdown
-- **Routine rotation** — detects the next workout in your A/B/C rotation
-- **30-day history** — service call returning enriched workout data for use in automations
-- **Unit support** — imperial (lbs) or metric (kg)
-- **Configurable polling** — 5 to 120 minute intervals
+- **Summary sensors**: workout count, streaks, weekly activity, and worked out today/this week
+- **Per-exercise sensors**: automatically created for each exercise, with personal records and full set history
+- **Muscle group tracking**: which muscles were hit, days since last trained, and which are due
+- **Weekly volume analysis**: volume per muscle group with exercise breakdown
+- **Routine rotation**: detects the next workout in your A/B/C rotation
+- **30-day history**: service call returning enriched workout data for use in automations
+- **Workout logging**: service call that posts a completed workout back to Hevy
+- **Unit support**: imperial (lbs) or metric (kg)
+- **Configurable polling**: 5 to 120 minute intervals
 
 ## Setup
 
