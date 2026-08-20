@@ -8,7 +8,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/o7triud67l)
 
-A comprehensive Home Assistant integration for tracking your [Hevy](https://www.hevyapp.com/) workouts — with rich set-level sensor data, personal records, muscle recovery tracking, and dashboard-ready cards.
+A comprehensive Home Assistant integration for tracking your [Hevy](https://www.hevyapp.com/) workouts, with rich set-level sensor data, personal records, muscle recovery tracking, and dashboard-ready cards.
 
 > **Note:** A [Hevy Pro](https://www.hevyapp.com/pro) subscription is required to access the Hevy API.
 
@@ -56,16 +56,17 @@ Access via **Devices & Services** → **Hevy Workout Tracker** → **Configure**
 
 ## Features
 
-- **Rich Workout Data** — Full set-level detail with weight, reps, and duration tracking
-- **Summary Sensors** — Workout count, streaks, and weekly activity at a glance
-- **Per-Exercise Sensors** — Individual sensors for each exercise with personal records
-- **Muscle Group Tracking** — Which muscles you hit, which are due, days since last trained
-- **Weekly Volume Analysis** — Volume per muscle group with full exercise breakdown
-- **Routine Rotation** — Automatically detects the next workout in your A/B/C rotation
-- **30-Day History** — Service call for full workout history with enriched data
-- **Automatic Updates** — Configurable polling interval (5–120 minutes)
-- **Calendar Entity** — Completed workouts appear on the HA calendar with exercise details, volume, and duration. This is a history view (workouts are logged after the fact), not an automation trigger source
-- **Unit Support** — Imperial (lbs) or metric (kg)
+- **Rich Workout Data**: Full set-level detail with weight, reps, and duration tracking
+- **Summary Sensors**: Workout count, streaks, and weekly activity at a glance
+- **Per-Exercise Sensors**: Individual sensors for each exercise with personal records
+- **Muscle Group Tracking**: Which muscles you hit, which are due, days since last trained
+- **Weekly Volume Analysis**: Volume per muscle group with full exercise breakdown
+- **Routine Rotation**: Automatically detects the next workout in your A/B/C rotation
+- **30-Day History**: Service call for full workout history with enriched data
+- **Workout Logging**: Service call that posts a completed workout back to Hevy, in your configured units
+- **Automatic Updates**: Configurable polling interval (5–120 minutes)
+- **Calendar Entity**: Completed workouts appear on the HA calendar with exercise details, volume, and duration. This is a history view (workouts are logged after the fact), not an automation trigger source
+- **Unit Support**: Imperial (lbs) or metric (kg)
 
 ---
 
@@ -684,7 +685,7 @@ styles:
 Dynamically created for each unique exercise in your history.
 
 **Example:** `sensor.hevy_bench_press_dumbbell`
-**State:** Best set — e.g., `35 lbs × 12` or `60s`
+**State:** Best set, e.g. `35 lbs × 12` or `60s`
 
 | Attribute | Description |
 |-----------|-------------|
@@ -708,12 +709,12 @@ Returns enriched workout history for a specified number of days. Call via **Deve
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `config_entry_id` | Yes | — | The Hevy integration config entry ID |
+| `config_entry_id` | Yes | none | The Hevy integration config entry ID |
 | `days` | No | 30 | Number of days of history (1–90) |
 
 **Response includes:**
-- `summary` — Total workouts, total volume, workout days, avg duration, avg volume per workout
-- `workouts` — Array of workouts with full exercise/set detail, muscle groups, and duration
+- `summary`: Total workouts, total volume, workout days, avg duration, avg volume per workout
+- `workouts`: Array of workouts with full exercise/set detail, muscle groups, and duration
 
 <details>
 <summary><b>Example automation using service response</b></summary>
@@ -728,6 +729,73 @@ action:
   - service: notify.mobile_app
     data:
       message: "This week: {{ history.summary.total_workouts }} workouts, {{ history.summary.total_volume }} lbs total volume"
+```
+
+</details>
+
+### `hevy.log_workout`
+
+Posts a completed workout to Hevy. Exercise names are matched against your Hevy exercise catalog (exact first, then case-insensitive), and weights and distances are sent in the unit system configured for the integration. If any exercise name cannot be matched, nothing is posted and the error lists the closest names.
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `config_entry_id` | Yes | none | The Hevy integration config entry ID |
+| `title` | Yes | none | Name of the workout |
+| `exercises` | Yes | none | List of exercises, each with a `name`, optional `notes`, and one or more `sets` |
+| `start_time` | No | End time minus duration | When the workout started |
+| `end_time` | No | Now | When the workout ended |
+| `duration_minutes` | No | none | Workout length, used to derive the start time |
+| `description` | No | none | Workout notes |
+| `is_private` | No | false | Hide the workout from your Hevy followers |
+
+Each set takes an optional `type` (`warmup`, `normal`, `failure`, `dropset`, defaulting to `normal`), an optional `rpe` (6, 7, 7.5, 8, 8.5, 9, 9.5, 10), and at least one of `weight`, `reps`, `duration_seconds`, or `distance`.
+
+**Response includes:**
+- `workout_id`: The ID Hevy assigned to the new workout
+- `title`: The title Hevy stored
+
+<details>
+<summary><b>Example script logging a workout from a dashboard button</b></summary>
+
+```yaml
+script:
+  log_quick_push:
+    alias: "Log Quick Push Workout"
+    sequence:
+      - service: hevy.log_workout
+        data:
+          config_entry_id: YOUR_CONFIG_ENTRY_ID
+          title: "Quick Push"
+          duration_minutes: 40
+          exercises:
+            - name: "Bench Press"
+              notes: "Felt strong"
+              sets:
+                - type: warmup
+                  weight: 135
+                  reps: 8
+                - weight: 225
+                  reps: 5
+                  rpe: 9
+            - name: "Triceps Pushdown"
+              sets:
+                - weight: 60
+                  reps: 12
+        response_variable: logged
+      - service: notify.mobile_app
+        data:
+          message: "Logged {{ logged.title }} to Hevy"
+```
+
+Add it to a dashboard with a button card:
+
+```yaml
+type: button
+name: Log Quick Push
+icon: mdi:dumbbell
+tap_action:
+  action: call-service
+  service: script.log_quick_push
 ```
 
 </details>
@@ -875,7 +943,7 @@ exercises_preview:
 </details>
 
 <details>
-<summary><b>Last Workout Date — <code>workout_summaries</code> attribute</b></summary>
+<summary><b>Last Workout Date: <code>workout_summaries</code> attribute</b></summary>
 
 The `workout_summaries` attribute on `sensor.hevy_last_workout_date` provides a date-keyed dict of the last 30 days of workouts, useful for powering calendar cards.
 
@@ -934,4 +1002,4 @@ If multiple workouts fall on the same date, only the most recent is included.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE) for details.

@@ -12,15 +12,29 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .api import HevyApiError
+from .const import (
+    DOMAIN,
+    KG_TO_LBS,
+    METERS_TO_KM,
+    METERS_TO_MILES,
+    UNIT_SYSTEM_METRIC,
+)
 from .coordinator import HevyDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 SERVICE_GET_WORKOUT_HISTORY = "get_workout_history"
+SERVICE_LOG_WORKOUT = "log_workout"
+
+SET_TYPES = ["warmup", "normal", "failure", "dropset"]
+RPE_VALUES = [6, 7, 7.5, 8, 8.5, 9, 9.5, 10]
+MEASUREMENT_FIELDS = ("weight", "reps", "duration_seconds", "distance")
+MAX_NAME_SUGGESTIONS = 3
 
 WORKOUT_HISTORY_SCHEMA = vol.Schema(
     {
@@ -30,6 +44,106 @@ WORKOUT_HISTORY_SCHEMA = vol.Schema(
         ),
     }
 )
+
+
+def _set_has_measurement(value: dict[str, Any]) -> dict[str, Any]:
+    if not any(value.get(field) is not None for field in MEASUREMENT_FIELDS):
+        raise vol.Invalid(
+            "Each set needs at least one of weight, reps, duration_seconds, "
+            "or distance"
+        )
+    return value
+
+
+SET_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Optional("type", default="normal"): vol.In(SET_TYPES),
+            vol.Optional("weight"): vol.Coerce(float),
+            vol.Optional("reps"): vol.Coerce(int),
+            vol.Optional("duration_seconds"): vol.Coerce(int),
+            vol.Optional("distance"): vol.Coerce(float),
+            vol.Optional("rpe"): vol.In(RPE_VALUES),
+        }
+    ),
+    _set_has_measurement,
+)
+
+EXERCISE_SCHEMA = vol.Schema(
+    {
+        vol.Required("name"): cv.string,
+        vol.Optional("notes"): cv.string,
+        vol.Required("sets"): vol.All(
+            cv.ensure_list, vol.Length(min=1), [SET_SCHEMA]
+        ),
+    }
+)
+
+LOG_WORKOUT_SCHEMA = vol.Schema(
+    {
+        vol.Required("config_entry_id"): cv.string,
+        vol.Required("title"): cv.string,
+        vol.Required("exercises"): vol.All(
+            cv.ensure_list, vol.Length(min=1), [EXERCISE_SCHEMA]
+        ),
+        vol.Optional("start_time"): cv.datetime,
+        vol.Optional("end_time"): cv.datetime,
+        vol.Optional("duration_minutes"): vol.All(
+            vol.Coerce(int), vol.Range(min=1)
+        ),
+        vol.Optional("description"): cv.string,
+        vol.Optional("is_private", default=False): cv.boolean,
+    }
+)
+
+
+def _to_kg(
+    coordinator: HevyDataUpdateCoordinator, weight: float | None
+) -> float | None:
+    if weight is None:
+        return None
+    if coordinator.unit_system == UNIT_SYSTEM_METRIC:
+        return float(weight)
+    return round(weight / KG_TO_LBS, 2)
+
+
+def _to_meters(
+    coordinator: HevyDataUpdateCoordinator, distance: float | None
+) -> int | None:
+    if distance is None:
+        return None
+    if coordinator.unit_system == UNIT_SYSTEM_METRIC:
+        return round(distance / METERS_TO_KM)
+    return round(distance / METERS_TO_MILES)
+
+
+def _resolve_template_id(
+    coordinator: HevyDataUpdateCoordinator, name: str
+) -> str:
+    templates = coordinator._exercise_templates
+
+    for template_id, template in templates.items():
+        if template.get("title") == name:
+            return template_id
+
+    lowered = name.lower()
+    for template_id, template in templates.items():
+        title = template.get("title")
+        if title and title.lower() == lowered:
+            return template_id
+
+    near_misses: list[str] = []
+    for template in templates.values():
+        title = template.get("title")
+        if title and lowered in title.lower():
+            near_misses.append(title)
+        if len(near_misses) == MAX_NAME_SUGGESTIONS:
+            break
+
+    message = f"Exercise '{name}' was not found in the Hevy exercise catalog"
+    if near_misses:
+        message = f"{message}. Did you mean: {', '.join(near_misses)}?"
+    raise HomeAssistantError(message)
 
 
 def async_register_services(hass: HomeAssistant) -> None:
@@ -174,6 +288,72 @@ def async_register_services(hass: HomeAssistant) -> None:
             "workouts": workouts_response,
         }
 
+    async def handle_log_workout(call: ServiceCall) -> ServiceResponse:
+        """Handle the log_workout service call."""
+        config_entry_id = call.data["config_entry_id"]
+
+        if config_entry_id not in hass.data.get(DOMAIN, {}):
+            raise ValueError(f"Config entry {config_entry_id} not found")
+
+        coordinator: HevyDataUpdateCoordinator = hass.data[DOMAIN][config_entry_id]
+
+        exercises_payload: list[dict[str, Any]] = []
+        for exercise in call.data["exercises"]:
+            template_id = _resolve_template_id(coordinator, exercise["name"])
+
+            sets_payload: list[dict[str, Any]] = []
+            for set_data in exercise["sets"]:
+                sets_payload.append({
+                    "type": set_data["type"],
+                    "weight_kg": _to_kg(coordinator, set_data.get("weight")),
+                    "reps": set_data.get("reps"),
+                    "distance_meters": _to_meters(
+                        coordinator, set_data.get("distance")
+                    ),
+                    "duration_seconds": set_data.get("duration_seconds"),
+                    "rpe": set_data.get("rpe"),
+                })
+
+            exercises_payload.append({
+                "exercise_template_id": template_id,
+                "notes": exercise.get("notes"),
+                "sets": sets_payload,
+            })
+
+        end_time = call.data.get("end_time") or dt_util.now()
+        start_time = call.data.get("start_time")
+        if start_time is None:
+            duration_minutes = call.data.get("duration_minutes")
+            start_time = (
+                end_time - timedelta(minutes=duration_minutes)
+                if duration_minutes
+                else end_time
+            )
+
+        workout: dict[str, Any] = {"title": call.data["title"]}
+        description = call.data.get("description")
+        if description is not None:
+            workout["description"] = description
+        workout["is_private"] = call.data["is_private"]
+        workout["start_time"] = start_time.isoformat()
+        workout["end_time"] = end_time.isoformat()
+        workout["exercises"] = exercises_payload
+
+        try:
+            created = await coordinator.client.create_workout({"workout": workout})
+        except HevyApiError as err:
+            raise HomeAssistantError(str(err)) from err
+
+        await coordinator.async_request_refresh()
+
+        result = created.get("workout", created) if created else {}
+        _LOGGER.debug("Logged workout %s", result.get("id"))
+
+        return {
+            "workout_id": result.get("id"),
+            "title": result.get("title"),
+        }
+
     if not hass.services.has_service(DOMAIN, SERVICE_GET_WORKOUT_HISTORY):
         hass.services.async_register(
             DOMAIN,
@@ -183,8 +363,18 @@ def async_register_services(hass: HomeAssistant) -> None:
             supports_response=SupportsResponse.ONLY,
         )
 
+    if not hass.services.has_service(DOMAIN, SERVICE_LOG_WORKOUT):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_LOG_WORKOUT,
+            handle_log_workout,
+            schema=LOG_WORKOUT_SCHEMA,
+            supports_response=SupportsResponse.OPTIONAL,
+        )
+
 
 def async_unregister_services(hass: HomeAssistant) -> None:
     """Unregister Hevy services if no more config entries."""
     if not hass.data.get(DOMAIN):
         hass.services.async_remove(DOMAIN, SERVICE_GET_WORKOUT_HISTORY)
+        hass.services.async_remove(DOMAIN, SERVICE_LOG_WORKOUT)

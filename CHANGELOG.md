@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `hevy.log_workout` service that posts a completed workout to Hevy. Exercise names are resolved against the cached exercise catalog, weights and distances are converted from your configured unit system, and the service returns the new workout ID and title
 - Issue templates for bug reports and feature requests
 - Pull request template with a tests, changelog, and docs checklist
 - CODEOWNERS so pull requests automatically request maintainer review
@@ -42,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.1] - 2026-03-14
 
 ### Added
-- **Per-exercise weekly distance** - Cardio exercise sensors now expose `weekly_distance` and `weekly_distance_unit` attributes showing 7-day rolling distance totals per exercise (e.g., 10 mi biking, 6 mi running — separately)
+- **Per-exercise weekly distance** - Cardio exercise sensors now expose `weekly_distance` and `weekly_distance_unit` attributes showing 7-day rolling distance totals per exercise (e.g., 10 mi biking, 6 mi running, tracked separately)
 
 ### Changed
 - Reuse computed weekly distance data instead of calling `_calculate_weekly_distance()` twice per update cycle
@@ -83,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.3] - 2026-03-09
 
 ### Fixed
-- Use Home Assistant's configured timezone for all date-based metrics (worked_out_today, streak, workout_days) instead of naive UTC date extraction — fixes incorrect values for users far from UTC (#3)
+- Use Home Assistant's configured timezone for all date-based metrics (worked_out_today, streak, workout_days) instead of naive UTC date extraction. Fixes incorrect values for users far from UTC (#3)
 
 ## [1.0.2] - 2026-02-26
 

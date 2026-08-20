@@ -19,3 +19,65 @@ get_workout_history:
       selector:
         config_entry:
           integration: hevy
+
+log_workout:
+  name: Log workout
+  description: Posts a completed workout to Hevy with full exercise and set detail.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: The Hevy integration config entry ID
+      required: true
+      selector:
+        config_entry:
+          integration: hevy
+    title:
+      name: Title
+      description: Name of the workout
+      required: true
+      selector:
+        text:
+    exercises:
+      name: Exercises
+      description: >-
+        List of exercises. Each needs a name matching a Hevy exercise template
+        and at least one set. A set takes an optional type (warmup, normal,
+        failure, dropset), weight, reps, duration_seconds, distance, and rpe.
+        Weight and distance use the unit system configured for the integration.
+      required: true
+      selector:
+        object:
+    start_time:
+      name: Start time
+      description: When the workout started. Defaults to the end time minus the duration.
+      required: false
+      selector:
+        datetime:
+    end_time:
+      name: End time
+      description: When the workout ended. Defaults to now.
+      required: false
+      selector:
+        datetime:
+    duration_minutes:
+      name: Duration
+      description: Workout length in minutes, used to derive the start time
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 600
+          mode: box
+    description:
+      name: Description
+      description: Optional workout notes
+      required: false
+      selector:
+        text:
+    is_private:
+      name: Private
+      description: Hide the workout from your Hevy followers
+      required: false
+      default: false
+      selector:
+        boolean:
