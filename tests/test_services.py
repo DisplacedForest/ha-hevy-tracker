@@ -9,6 +9,8 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from custom_components.hevy.api import HevyApiClient, HevyApiError, HevyAuthError
 from custom_components.hevy.const import DOMAIN
 from custom_components.hevy.services import (
+    SERVICE_GET_EXERCISE_CATALOG,
+    SERVICE_GET_ROUTINES,
     SERVICE_GET_WORKOUT_HISTORY,
     SERVICE_LOG_WORKOUT,
     async_register_services,
@@ -428,3 +430,150 @@ class TestApiClient:
         assert await client.create_workout(workout) == {"id": "w-1"}
         assert client._request.await_args.args == ("POST", "/workouts")
         assert client._request.await_args.kwargs == {"json": workout}
+
+
+async def _catalog(hass, config_entry_id=ENTRY_ID):
+    return await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_EXERCISE_CATALOG,
+        {"config_entry_id": config_entry_id},
+        blocking=True,
+        return_response=True,
+    )
+
+
+async def _routines(hass, config_entry_id=ENTRY_ID):
+    return await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GET_ROUTINES,
+        {"config_entry_id": config_entry_id},
+        blocking=True,
+        return_response=True,
+    )
+
+
+class TestExerciseCatalog:
+    async def test_service_is_registered(self, hass, imperial_setup) -> None:
+        assert hass.services.has_service(DOMAIN, SERVICE_GET_EXERCISE_CATALOG)
+
+    async def test_returns_sorted_catalog(self, hass, imperial_setup) -> None:
+        response = await _catalog(hass)
+        assert response == {
+            "count": 4,
+            "exercises": [
+                {"id": "t1", "title": "Bench Press", "muscle_group": "chest"},
+                {
+                    "id": "t4",
+                    "title": "Close Grip Bench Press",
+                    "muscle_group": "triceps",
+                },
+                {
+                    "id": "t2",
+                    "title": "Incline Bench Press",
+                    "muscle_group": "chest",
+                },
+                {"id": "t3", "title": "Running", "muscle_group": "cardio"},
+            ],
+        }
+
+    async def test_empty_catalog(self, hass, imperial_setup) -> None:
+        imperial_setup._exercise_templates = {}
+        response = await _catalog(hass)
+        assert response == {"count": 0, "exercises": []}
+
+    async def test_unknown_config_entry(self, hass, imperial_setup) -> None:
+        with pytest.raises(ServiceValidationError):
+            await _catalog(hass, config_entry_id="missing")
+
+
+class TestGetRoutines:
+    async def test_service_is_registered(self, hass, imperial_setup) -> None:
+        assert hass.services.has_service(DOMAIN, SERVICE_GET_ROUTINES)
+
+    async def test_imperial_response_shape(self, hass, imperial_setup) -> None:
+        await imperial_setup.fetch_routines()
+        response = await _routines(hass)
+        assert response == {
+            "count": 2,
+            "routines": [
+                {
+                    "id": "r1",
+                    "title": "Push Day",
+                    "exercises": [
+                        {
+                            "name": "Bench Press",
+                            "exercise_template_id": "t1",
+                            "sets": [
+                                {"type": "warmup", "weight": 135.0, "reps": 8},
+                                {"type": "normal", "weight": 225.0, "reps": 5},
+                            ],
+                        },
+                        {
+                            "name": "Running",
+                            "exercise_template_id": "t3",
+                            "sets": [
+                                {
+                                    "type": "normal",
+                                    "duration_seconds": 1500,
+                                    "distance": 3.1,
+                                }
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "id": "r2",
+                    "title": "Mobility",
+                    "exercises": [
+                        {
+                            "name": "Hip Openers",
+                            "exercise_template_id": "t5",
+                            "sets": [],
+                        }
+                    ],
+                },
+            ],
+        }
+
+    async def test_metric_converts_sets(self, hass, metric_setup) -> None:
+        await metric_setup.fetch_routines()
+        response = await _routines(hass)
+        push_day = response["routines"][0]
+        assert push_day["exercises"][0]["sets"] == [
+            {"type": "warmup", "weight": 61.0, "reps": 8},
+            {"type": "normal", "weight": 102.0, "reps": 5},
+        ]
+        assert push_day["exercises"][1]["sets"][0]["distance"] == 4.99
+
+    async def test_sets_round_trip_into_log_workout(
+        self, hass, imperial_setup
+    ) -> None:
+        await imperial_setup.fetch_routines()
+        response = await _routines(hass)
+        push_day = response["routines"][0]
+
+        await _log(
+            hass,
+            title=push_day["title"],
+            exercises=[
+                {"name": exercise["name"], "sets": exercise["sets"]}
+                for exercise in push_day["exercises"]
+                if exercise["sets"]
+            ],
+        )
+
+        payload = imperial_setup.client.create_workout.await_args.args[0]
+        bench, running = payload["workout"]["exercises"]
+        assert bench["exercise_template_id"] == "t1"
+        assert [s["weight_kg"] for s in bench["sets"]] == [61.24, 102.06]
+        assert [s["reps"] for s in bench["sets"]] == [8, 5]
+        assert running["sets"][0]["distance_meters"] == 4989
+        assert running["sets"][0]["duration_seconds"] == 1500
+
+    async def test_empty_routines(self, hass, imperial_setup) -> None:
+        response = await _routines(hass)
+        assert response == {"count": 0, "routines": []}
+
+    async def test_unknown_config_entry(self, hass, imperial_setup) -> None:
+        with pytest.raises(ServiceValidationError):
+            await _routines(hass, config_entry_id="missing")

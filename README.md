@@ -733,6 +733,90 @@ action:
 
 </details>
 
+### `hevy.get_exercise_catalog`
+
+Returns the cached Hevy exercise catalog, sorted by title. Use it to find the exact names `hevy.log_workout` expects.
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `config_entry_id` | Yes | none | The Hevy integration config entry ID |
+
+**Response includes:**
+- `count`: Number of exercises in the catalog
+- `exercises`: Array of `{ id, title, muscle_group }`
+
+<details>
+<summary><b>Example call and response</b></summary>
+
+```yaml
+action:
+  - service: hevy.get_exercise_catalog
+    data:
+      config_entry_id: YOUR_CONFIG_ENTRY_ID
+    response_variable: catalog
+```
+
+```yaml
+count: 412
+exercises:
+  - id: 79D0BB3A
+    title: Bench Press (Barbell)
+    muscle_group: chest
+  - id: 0393F233
+    title: Bicep Curl (Dumbbell)
+    muscle_group: biceps
+```
+
+</details>
+
+### `hevy.get_routines`
+
+Returns your saved Hevy routines with every exercise and set. Weights and distances come back in the unit system configured for the integration, so a routine's sets can be handed straight to `hevy.log_workout`.
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `config_entry_id` | Yes | none | The Hevy integration config entry ID |
+
+**Response includes:**
+- `count`: Number of routines
+- `routines`: Array of `{ id, title, exercises }`, where each exercise has a `name`, an `exercise_template_id`, and a list of sets. A set always has a `type`, plus whichever of `weight`, `reps`, `duration_seconds`, and `distance` the routine defines.
+
+<details>
+<summary><b>Example call and response</b></summary>
+
+```yaml
+action:
+  - service: hevy.get_routines
+    data:
+      config_entry_id: YOUR_CONFIG_ENTRY_ID
+    response_variable: routines
+```
+
+```yaml
+count: 2
+routines:
+  - id: r-8f21
+    title: Push Day
+    exercises:
+      - name: Bench Press
+        exercise_template_id: 79D0BB3A
+        sets:
+          - type: warmup
+            weight: 135
+            reps: 8
+          - type: normal
+            weight: 225
+            reps: 5
+      - name: Running
+        exercise_template_id: AC1BB830
+        sets:
+          - type: normal
+            duration_seconds: 1500
+            distance: 3.1
+```
+
+</details>
+
 ### `hevy.log_workout`
 
 Posts a completed workout to Hevy. Exercise names are matched against your Hevy exercise catalog (exact first, then case-insensitive), and weights and distances are sent in the unit system configured for the integration. If any exercise name cannot be matched, nothing is posted and the error lists the closest names.

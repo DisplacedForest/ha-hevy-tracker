@@ -20,6 +20,30 @@ get_workout_history:
         config_entry:
           integration: hevy
 
+get_exercise_catalog:
+  name: Get exercise catalog
+  description: Returns the cached Hevy exercise catalog so you can look up the exact names log_workout accepts.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: The Hevy integration config entry ID
+      required: true
+      selector:
+        config_entry:
+          integration: hevy
+
+get_routines:
+  name: Get routines
+  description: Returns your saved Hevy routines with full set detail, in the unit system configured for the integration. The sets can be passed straight to log_workout.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: The Hevy integration config entry ID
+      required: true
+      selector:
+        config_entry:
+          integration: hevy
+
 log_workout:
   name: Log workout
   description: Posts a completed workout to Hevy with full exercise and set detail. Mistaken logs can only be deleted in the Hevy mobile app.

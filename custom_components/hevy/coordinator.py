@@ -61,6 +61,10 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def exercise_templates(self) -> dict[str, dict]:
         return self._exercise_templates
 
+    @property
+    def routines(self) -> list[dict[str, Any]]:
+        return self._routines
+
     async def fetch_exercise_templates(self) -> None:
         """Fetch and cache exercise template catalog from all pages."""
         try:
@@ -111,10 +115,29 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 routine_id = routine.get("id")
                 if routine_id:
                     exercises = []
-                    for exercise in routine.get("exercises", []):
+                    for exercise in routine.get("exercises") or []:
                         title = exercise.get("title")
                         if title:
-                            exercises.append(title)
+                            exercises.append({
+                                "name": title,
+                                "exercise_template_id": exercise.get(
+                                    "exercise_template_id"
+                                ),
+                                "sets": [
+                                    {
+                                        "type": set_data.get("type", "normal"),
+                                        "weight_kg": set_data.get("weight_kg"),
+                                        "reps": set_data.get("reps"),
+                                        "duration_seconds": set_data.get(
+                                            "duration_seconds"
+                                        ),
+                                        "distance_meters": set_data.get(
+                                            "distance_meters"
+                                        ),
+                                    }
+                                    for set_data in exercise.get("sets") or []
+                                ],
+                            })
                     self._routines.append({
                         "id": routine_id,
                         "title": routine.get("title", "Untitled"),
@@ -165,6 +188,14 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return all_workouts
 
+    @staticmethod
+    def _routine_exercise_titles(routine: dict[str, Any]) -> list[str]:
+        return [
+            exercise["name"]
+            for exercise in routine.get("exercises", [])
+            if exercise.get("name")
+        ]
+
     def _detect_next_workout(self) -> dict[str, Any]:
         """Detect the next workout in the routine rotation.
 
@@ -195,7 +226,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "last_workout_routine_id": None,
                 "rotation_position": 1,
                 "rotation_total": len(self._routines),
-                "exercises_preview": first["exercises"],
+                "exercises_preview": self._routine_exercise_titles(first),
             }
 
         last_routine_id = last_workout.get("routine_id")
@@ -232,7 +263,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_workout_routine_id": last_routine_id,
             "rotation_position": next_index + 1,
             "rotation_total": len(self._routines),
-            "exercises_preview": next_routine["exercises"],
+            "exercises_preview": self._routine_exercise_titles(next_routine),
         }
 
     def _aggregate_muscle_groups(self) -> dict[str, Any]:
