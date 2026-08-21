@@ -272,3 +272,76 @@ class TestFetch30DayWorkouts:
         result = await imperial_coordinator._fetch_30_day_workouts()
         assert result == []
         assert mock_client.get_workouts.call_count == 1
+
+
+class TestFetchRoutines:
+    async def test_caches_full_set_detail(self, imperial_coordinator) -> None:
+        await imperial_coordinator.fetch_routines()
+        push_day = imperial_coordinator.routines[0]
+        assert push_day["id"] == "r1"
+        assert push_day["title"] == "Push Day"
+        assert push_day["exercises"][0] == {
+            "name": "Bench Press",
+            "exercise_template_id": "t1",
+            "sets": [
+                {
+                    "type": "warmup",
+                    "weight_kg": 61.24,
+                    "reps": 8,
+                    "duration_seconds": None,
+                    "distance_meters": None,
+                },
+                {
+                    "type": "normal",
+                    "weight_kg": 102.06,
+                    "reps": 5,
+                    "duration_seconds": None,
+                    "distance_meters": None,
+                },
+            ],
+        }
+        assert push_day["exercises"][1]["sets"][0]["distance_meters"] == 4989
+
+    async def test_exercise_without_sets(self, imperial_coordinator) -> None:
+        await imperial_coordinator.fetch_routines()
+        mobility = imperial_coordinator.routines[1]
+        assert mobility["exercises"] == [
+            {
+                "name": "Hip Openers",
+                "exercise_template_id": "t5",
+                "sets": [],
+            }
+        ]
+
+    async def test_routine_without_exercises(
+        self, imperial_coordinator, mock_client
+    ) -> None:
+        mock_client.get_routines.return_value = {
+            "routines": [{"id": "r9", "title": "Empty", "exercises": None}]
+        }
+        await imperial_coordinator.fetch_routines()
+        assert imperial_coordinator.routines == [
+            {"id": "r9", "title": "Empty", "exercises": []}
+        ]
+
+
+class TestDetectNextWorkout:
+    async def test_no_routines(self, imperial_coordinator) -> None:
+        result = imperial_coordinator._detect_next_workout()
+        assert result["exercises_preview"] == []
+        assert result["rotation_total"] == 0
+
+    async def test_preview_is_exercise_titles(self, imperial_coordinator) -> None:
+        await imperial_coordinator.fetch_routines()
+        result = imperial_coordinator._detect_next_workout()
+        assert result["next_routine"] == "Push Day"
+        assert result["exercises_preview"] == ["Bench Press", "Running"]
+
+    async def test_preview_after_last_workout(self, imperial_coordinator) -> None:
+        await imperial_coordinator.fetch_routines()
+        imperial_coordinator._workout_history = [
+            {"routine_id": "r1", "title": "Push Day"}
+        ]
+        result = imperial_coordinator._detect_next_workout()
+        assert result["routine_id"] == "r2"
+        assert result["exercises_preview"] == ["Hip Openers"]

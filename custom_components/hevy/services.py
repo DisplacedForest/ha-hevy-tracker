@@ -30,6 +30,8 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_GET_WORKOUT_HISTORY = "get_workout_history"
 SERVICE_LOG_WORKOUT = "log_workout"
+SERVICE_GET_EXERCISE_CATALOG = "get_exercise_catalog"
+SERVICE_GET_ROUTINES = "get_routines"
 
 SET_TYPES = ["warmup", "normal", "failure", "dropset"]
 RPE_VALUES = [6.0, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]
@@ -42,6 +44,13 @@ WORKOUT_HISTORY_SCHEMA = vol.Schema(
         vol.Optional("days", default=30): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=90)
         ),
+    }
+)
+
+
+CONFIG_ENTRY_ONLY_SCHEMA = vol.Schema(
+    {
+        vol.Required("config_entry_id"): cv.string,
     }
 )
 
@@ -358,6 +367,77 @@ def async_register_services(hass: HomeAssistant) -> None:
             "title": result.get("title"),
         }
 
+    async def handle_get_exercise_catalog(call: ServiceCall) -> ServiceResponse:
+        config_entry_id = call.data["config_entry_id"]
+
+        if config_entry_id not in hass.data.get(DOMAIN, {}):
+            raise ServiceValidationError(f"Config entry {config_entry_id} not found")
+
+        coordinator: HevyDataUpdateCoordinator = hass.data[DOMAIN][config_entry_id]
+
+        exercises = [
+            {
+                "id": template_id,
+                "title": template.get("title"),
+                "muscle_group": template.get("muscle_group"),
+            }
+            for template_id, template in coordinator.exercise_templates.items()
+        ]
+        exercises.sort(key=lambda exercise: exercise["title"] or "")
+
+        return {
+            "count": len(exercises),
+            "exercises": exercises,
+        }
+
+    async def handle_get_routines(call: ServiceCall) -> ServiceResponse:
+        config_entry_id = call.data["config_entry_id"]
+
+        if config_entry_id not in hass.data.get(DOMAIN, {}):
+            raise ServiceValidationError(f"Config entry {config_entry_id} not found")
+
+        coordinator: HevyDataUpdateCoordinator = hass.data[DOMAIN][config_entry_id]
+
+        routines_response: list[dict[str, Any]] = []
+        for routine in coordinator.routines:
+            exercises_response: list[dict[str, Any]] = []
+            for exercise in routine.get("exercises", []):
+                sets_response: list[dict[str, Any]] = []
+                for set_data in exercise.get("sets", []):
+                    set_response: dict[str, Any] = {
+                        "type": set_data.get("type", "normal")
+                    }
+                    weight = coordinator._convert_weight(set_data.get("weight_kg"))
+                    if weight is not None:
+                        set_response["weight"] = weight
+                    if set_data.get("reps") is not None:
+                        set_response["reps"] = set_data["reps"]
+                    if set_data.get("duration_seconds") is not None:
+                        set_response["duration_seconds"] = set_data["duration_seconds"]
+                    distance = coordinator._convert_distance(
+                        set_data.get("distance_meters")
+                    )
+                    if distance is not None:
+                        set_response["distance"] = distance
+                    sets_response.append(set_response)
+
+                exercises_response.append({
+                    "name": exercise.get("name"),
+                    "exercise_template_id": exercise.get("exercise_template_id"),
+                    "sets": sets_response,
+                })
+
+            routines_response.append({
+                "id": routine.get("id"),
+                "title": routine.get("title"),
+                "exercises": exercises_response,
+            })
+
+        return {
+            "count": len(routines_response),
+            "routines": routines_response,
+        }
+
     if not hass.services.has_service(DOMAIN, SERVICE_GET_WORKOUT_HISTORY):
         hass.services.async_register(
             DOMAIN,
@@ -376,9 +456,29 @@ def async_register_services(hass: HomeAssistant) -> None:
             supports_response=SupportsResponse.OPTIONAL,
         )
 
+    if not hass.services.has_service(DOMAIN, SERVICE_GET_EXERCISE_CATALOG):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_GET_EXERCISE_CATALOG,
+            handle_get_exercise_catalog,
+            schema=CONFIG_ENTRY_ONLY_SCHEMA,
+            supports_response=SupportsResponse.ONLY,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_GET_ROUTINES):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_GET_ROUTINES,
+            handle_get_routines,
+            schema=CONFIG_ENTRY_ONLY_SCHEMA,
+            supports_response=SupportsResponse.ONLY,
+        )
+
 
 def async_unregister_services(hass: HomeAssistant) -> None:
     """Unregister Hevy services if no more config entries."""
     if not hass.data.get(DOMAIN):
         hass.services.async_remove(DOMAIN, SERVICE_GET_WORKOUT_HISTORY)
         hass.services.async_remove(DOMAIN, SERVICE_LOG_WORKOUT)
+        hass.services.async_remove(DOMAIN, SERVICE_GET_EXERCISE_CATALOG)
+        hass.services.async_remove(DOMAIN, SERVICE_GET_ROUTINES)

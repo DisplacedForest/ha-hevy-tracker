@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `hevy.get_exercise_catalog` service that returns the cached Hevy exercise catalog sorted by title, so you can look up the exact names `hevy.log_workout` accepts
+- `hevy.get_routines` service that returns your saved routines with full exercise and set detail in your configured unit system. The sets it returns can be passed straight to `hevy.log_workout`
+
 ### Changed
 - `hevy.log_workout` now rejects negative weight, reps, duration, and distance values, and accepts RPE as a string or a number
 - `hevy.get_workout_history` and `hevy.log_workout` now raise a proper validation error (instead of a generic one) when the config entry ID does not match a configured Hevy integration

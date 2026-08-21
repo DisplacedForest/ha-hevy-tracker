@@ -13,6 +13,7 @@ Track your [Hevy](https://www.hevyapp.com/) workouts in Home Assistant with rich
 - **Routine rotation**: detects the next workout in your A/B/C rotation
 - **30-day history**: service call returning enriched workout data for use in automations
 - **Workout logging**: service call that posts a completed workout back to Hevy
+- **Catalog and routine lookups**: service calls returning your exercise catalog and your saved routines, ready to feed back into workout logging
 - **Unit support**: imperial (lbs) or metric (kg)
 - **Configurable polling**: 5 to 120 minute intervals
 
