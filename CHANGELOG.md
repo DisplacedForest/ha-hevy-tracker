@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `hevy.log_workout` now rejects negative weight, reps, duration, and distance values, and accepts RPE as a string or a number
+- `hevy.get_workout_history` and `hevy.log_workout` now raise a proper validation error (instead of a generic one) when the config entry ID does not match a configured Hevy integration
+
 ## [1.3.0] - 2026-08-20
 
 ### Added
