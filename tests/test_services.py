@@ -4,11 +4,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 import voluptuous as vol
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from custom_components.hevy.api import HevyApiClient, HevyApiError, HevyAuthError
 from custom_components.hevy.const import DOMAIN
 from custom_components.hevy.services import (
+    SERVICE_GET_WORKOUT_HISTORY,
     SERVICE_LOG_WORKOUT,
     async_register_services,
 )
@@ -123,6 +124,52 @@ class TestSchema:
         )
         payload = imperial_setup.client.create_workout.await_args.args[0]
         assert payload["workout"]["exercises"][0]["sets"][0]["rpe"] == 8.5
+
+    async def test_rpe_as_string_accepted(self, hass, imperial_setup) -> None:
+        await _log(
+            hass,
+            exercises=[{"name": "Bench Press", "sets": [{"reps": 5, "rpe": "8.5"}]}],
+        )
+        payload = imperial_setup.client.create_workout.await_args.args[0]
+        assert payload["workout"]["exercises"][0]["sets"][0]["rpe"] == 8.5
+
+    async def test_negative_weight_rejected(self, hass, imperial_setup) -> None:
+        with pytest.raises(vol.Invalid):
+            await _log(
+                hass,
+                exercises=[
+                    {"name": "Bench Press", "sets": [{"weight": -5, "reps": 5}]}
+                ],
+            )
+        imperial_setup.client.create_workout.assert_not_awaited()
+
+    async def test_negative_reps_rejected(self, hass, imperial_setup) -> None:
+        with pytest.raises(vol.Invalid):
+            await _log(
+                hass,
+                exercises=[{"name": "Bench Press", "sets": [{"reps": -5}]}],
+            )
+        imperial_setup.client.create_workout.assert_not_awaited()
+
+    async def test_negative_duration_seconds_rejected(
+        self, hass, imperial_setup
+    ) -> None:
+        with pytest.raises(vol.Invalid):
+            await _log(
+                hass,
+                exercises=[
+                    {"name": "Running", "sets": [{"duration_seconds": -5}]}
+                ],
+            )
+        imperial_setup.client.create_workout.assert_not_awaited()
+
+    async def test_negative_distance_rejected(self, hass, imperial_setup) -> None:
+        with pytest.raises(vol.Invalid):
+            await _log(
+                hass,
+                exercises=[{"name": "Running", "sets": [{"distance": -5}]}],
+            )
+        imperial_setup.client.create_workout.assert_not_awaited()
 
 
 class TestNameResolution:
@@ -358,8 +405,18 @@ class TestResponseAndErrors:
         assert "Invalid API key" in str(err.value)
 
     async def test_unknown_config_entry(self, hass, imperial_setup) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ServiceValidationError):
             await _log(hass, config_entry_id="missing")
+
+    async def test_unknown_config_entry_history(self, hass, imperial_setup) -> None:
+        with pytest.raises(ServiceValidationError):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_GET_WORKOUT_HISTORY,
+                {"config_entry_id": "missing"},
+                blocking=True,
+                return_response=True,
+            )
 
 
 class TestApiClient:

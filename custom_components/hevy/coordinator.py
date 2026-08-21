@@ -57,6 +57,10 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._exercise_templates: dict[str, dict] = {}  # Cache templates by ID
         self._routines: list[dict[str, Any]] = []
 
+    @property
+    def exercise_templates(self) -> dict[str, dict]:
+        return self._exercise_templates
+
     async def fetch_exercise_templates(self) -> None:
         """Fetch and cache exercise template catalog from all pages."""
         try:

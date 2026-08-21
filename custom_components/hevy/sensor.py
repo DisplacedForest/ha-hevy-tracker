@@ -431,8 +431,8 @@ class HevyExerciseSensor(CoordinatorEntity[HevyDataUpdateCoordinator], SensorEnt
 
         # Enrich with template data if available
         template_id = exercise_data.get("exercise_template_id")
-        if template_id and template_id in self.coordinator._exercise_templates:
-            template = self.coordinator._exercise_templates[template_id]
+        if template_id and template_id in self.coordinator.exercise_templates:
+            template = self.coordinator.exercise_templates[template_id]
             attrs.update(
                 {
                     "muscle_group": template.get("muscle_group"),

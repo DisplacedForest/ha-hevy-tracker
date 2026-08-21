@@ -12,7 +12,7 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
@@ -32,7 +32,7 @@ SERVICE_GET_WORKOUT_HISTORY = "get_workout_history"
 SERVICE_LOG_WORKOUT = "log_workout"
 
 SET_TYPES = ["warmup", "normal", "failure", "dropset"]
-RPE_VALUES = [6, 7, 7.5, 8, 8.5, 9, 9.5, 10]
+RPE_VALUES = [6.0, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]
 MEASUREMENT_FIELDS = ("weight", "reps", "duration_seconds", "distance")
 MAX_NAME_SUGGESTIONS = 3
 
@@ -59,11 +59,13 @@ SET_SCHEMA = vol.All(
     vol.Schema(
         {
             vol.Optional("type", default="normal"): vol.In(SET_TYPES),
-            vol.Optional("weight"): vol.Coerce(float),
-            vol.Optional("reps"): vol.Coerce(int),
-            vol.Optional("duration_seconds"): vol.Coerce(int),
-            vol.Optional("distance"): vol.Coerce(float),
-            vol.Optional("rpe"): vol.In(RPE_VALUES),
+            vol.Optional("weight"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Optional("reps"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+            vol.Optional("duration_seconds"): vol.All(
+                vol.Coerce(int), vol.Range(min=0)
+            ),
+            vol.Optional("distance"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Optional("rpe"): vol.All(vol.Coerce(float), vol.In(RPE_VALUES)),
         }
     ),
     _set_has_measurement,
@@ -120,7 +122,7 @@ def _to_meters(
 def _resolve_template_id(
     coordinator: HevyDataUpdateCoordinator, name: str
 ) -> str:
-    templates = coordinator._exercise_templates
+    templates = coordinator.exercise_templates
 
     for template_id, template in templates.items():
         if template.get("title") == name:
@@ -155,7 +157,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         config_entry_id = call.data["config_entry_id"]
 
         if config_entry_id not in hass.data.get(DOMAIN, {}):
-            raise ValueError(f"Config entry {config_entry_id} not found")
+            raise ServiceValidationError(f"Config entry {config_entry_id} not found")
 
         coordinator: HevyDataUpdateCoordinator = hass.data[DOMAIN][config_entry_id]
         cutoff = dt_util.now() - timedelta(days=days)
@@ -224,8 +226,8 @@ def async_register_services(hass: HomeAssistant) -> None:
             for exercise in workout.get("exercises", []):
                 template_id = exercise.get("exercise_template_id")
                 muscle_group = None
-                if template_id and template_id in coordinator._exercise_templates:
-                    template = coordinator._exercise_templates[template_id]
+                if template_id and template_id in coordinator.exercise_templates:
+                    template = coordinator.exercise_templates[template_id]
                     muscle_group = template.get("muscle_group")
                     if muscle_group and muscle_group not in seen_groups:
                         muscle_groups.append(muscle_group)
@@ -293,7 +295,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         config_entry_id = call.data["config_entry_id"]
 
         if config_entry_id not in hass.data.get(DOMAIN, {}):
-            raise ValueError(f"Config entry {config_entry_id} not found")
+            raise ServiceValidationError(f"Config entry {config_entry_id} not found")
 
         coordinator: HevyDataUpdateCoordinator = hass.data[DOMAIN][config_entry_id]
 
