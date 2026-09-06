@@ -78,6 +78,17 @@ test("registers the native card and editor and escapes remote content", async (t
   assert.equal(card.shadowRoot.querySelector("[data-field=title]").value, initial.session.title);
 });
 
+test("disables edits and refuses mutations while Home Assistant is disconnected", async (t) => {
+  const ctx = await setup(t);
+  ctx.card.hass = { ...ctx.card._hass, connected: false };
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-field=weight]").disabled, true);
+  ctx.input("[data-field=weight]", 99);
+  assert.equal(ctx.card._draft.exercises[0].sets[0].weight, 60);
+  await assert.rejects(ctx.card._service("finish_workout"), /Reconnect/);
+  assert.equal(ctx.calls.filter((call) => call.service !== "get_workout_board").length, 0);
+  assert.match(ctx.card.shadowRoot.querySelector("[data-save-status]").textContent, /Offline/);
+});
+
 test("serializes changed drafts without replacing focused inputs or losing newer edits", async (t) => {
   const held = deferred();
   let updates = 0;

@@ -110,10 +110,13 @@ class HevyWorkoutCard extends HTMLElement {
 
   set hass(hass) {
     const connected = hass.connection?.connected ?? hass.connected ?? true;
+    const connectionChanged = connected !== this._wasConnected;
     const reconnect = this._wasConnected === false && connected;
     const first = !this._hass;
     this._wasConnected = connected;
     this._hass = hass;
+    if (!connected) clearTimeout(this._saveTimer);
+    if (connectionChanged) this._render();
     if (this.isConnected && (first || reconnect || this._needsLoad)) void this._load();
   }
 
@@ -135,6 +138,7 @@ class HevyWorkoutCard extends HTMLElement {
   }
 
   get _dirty() { return this._editVersion !== this._savedVersion; }
+  get _online() { return (this._hass?.connection?.connected ?? this._hass?.connected) !== false; }
 
   _reset(entry) {
     this._epoch += 1;
@@ -154,6 +158,7 @@ class HevyWorkoutCard extends HTMLElement {
   }
 
   async _service(service, data = {}, entry = this._entry) {
+    if (!this._online) throw new Error("Reconnect to Home Assistant before continuing.");
     if (service !== "get_workout_board") this._requestVersion += 1;
     const result = await this._hass.callWS({
       type: "call_service",
@@ -291,7 +296,7 @@ class HevyWorkoutCard extends HTMLElement {
       this._renderOptions();
       return;
     }
-    if (!this._draft || this._draft.status !== "active" || this._actionBusy) return;
+    if (!this._online || !this._draft || this._draft.status !== "active" || this._actionBusy) return;
     const field = target.dataset.field;
     if (!field || target.type === "checkbox" || target.tagName === "SELECT") return;
     const key = `${field}:${target.dataset.exercise || ""}:${target.dataset.set || ""}`;
@@ -316,7 +321,7 @@ class HevyWorkoutCard extends HTMLElement {
   _change(event) {
     const target = event.target;
     if (target.dataset.action === "account") { void this._switchAccount(target.value); return; }
-    if (!this._draft || this._draft.status !== "active" || this._actionBusy) return;
+    if (!this._online || !this._draft || this._draft.status !== "active" || this._actionBusy) return;
     const field = target.dataset.field;
     if (field === "is_private") this._draft.is_private = target.checked;
     else if (field === "completed" || field === "type" || field === "rpe") {
@@ -347,7 +352,7 @@ class HevyWorkoutCard extends HTMLElement {
 
   _click(event) {
     const button = event.target.closest("button[data-action]");
-    if (!button || button.disabled || this._actionBusy) return;
+    if (!this._online || !button || button.disabled || this._actionBusy) return;
     const action = button.dataset.action;
     if (this._invalid.size && !["load-saved", "reload-confirm", "dismiss", "refresh"].includes(action)) {
       this._error = "Check the highlighted values. Measurements must be between 0 and 1,000,000; reps and seconds must be whole numbers. The title cannot be empty.";
@@ -435,14 +440,14 @@ class HevyWorkoutCard extends HTMLElement {
 
   _status() {
     const status = this.shadowRoot.querySelector("[data-save-status]");
-    if (status) status.textContent = this._invalid.size ? "Check highlighted values" : this._saveError ? "Changes not saved" : this._saving || this._dirty ? "Saving changes..." : "Saved in Home Assistant";
+    if (status) status.textContent = !this._online ? "Offline. Reconnect to Home Assistant." : this._invalid.size ? "Check highlighted values" : this._saveError ? "Changes not saved" : this._saving || this._dirty ? "Saving changes..." : "Saved in Home Assistant";
     const { total, completed } = this._count();
     const count = this.shadowRoot.querySelector("[data-count]");
     if (count) count.textContent = `${completed} of ${total} sets completed`;
     const progress = this.shadowRoot.querySelector(".progress > span");
     if (progress) progress.style.width = `${total ? completed / total * 100 : 0}%`;
     const finish = this.shadowRoot.querySelector('[data-action="finish"]');
-    if (finish) finish.disabled = !completed || this._actionBusy || this._saveError || Boolean(this._invalid.size);
+    if (finish) finish.disabled = !this._online || !completed || this._actionBusy || this._saveError || Boolean(this._invalid.size);
   }
 
   _renderError() {
@@ -519,8 +524,8 @@ class HevyWorkoutCard extends HTMLElement {
 
   _render() {
     const draft = this._draft;
-    const busy = this._actionBusy ? "disabled" : "";
-    const disabled = this._actionBusy || draft?.status !== "active" ? "disabled" : "";
+    const busy = this._actionBusy || !this._online ? "disabled" : "";
+    const disabled = this._actionBusy || !this._online || draft?.status !== "active" ? "disabled" : "";
     const accounts = this._board?.accounts || [];
     let content;
     let footer = "";

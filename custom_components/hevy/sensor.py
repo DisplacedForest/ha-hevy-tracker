@@ -1,4 +1,5 @@
 """Sensor platform for Hevy Workout Tracker."""
+
 from __future__ import annotations
 
 import hashlib
@@ -8,11 +9,13 @@ from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -92,7 +95,9 @@ async def async_setup_entry(
         new_entities = []
         for exercise_key in exercise_data:
             if exercise_key not in known:
-                new_entities.append(HevyExerciseSensor(coordinator, entry, exercise_key))
+                new_entities.append(
+                    HevyExerciseSensor(coordinator, entry, exercise_key)
+                )
                 known.add(exercise_key)
 
         if new_entities:
@@ -118,7 +123,7 @@ def get_device_info(entry: ConfigEntry) -> DeviceInfo:
         name="Hevy Workout Tracker",
         manufacturer="Hevy",
         model="Workout Tracker",
-        entry_type="service",
+        entry_type=DeviceEntryType.SERVICE,
     )
 
 
@@ -175,7 +180,7 @@ class HevyLastWorkoutDateSensor(HevyBaseSensor):
     """Sensor for last workout date."""
 
     _attr_icon = "mdi:calendar-clock"
-    _attr_device_class = "timestamp"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
     _unrecorded_attributes = frozenset({"workout_dates", "workout_summaries"})
 
     def __init__(
@@ -447,19 +452,27 @@ class HevyExerciseSensor(CoordinatorEntity[HevyDataUpdateCoordinator], SensorEnt
             attrs["weight"] = exercise_data.get("weight")
             attrs["weight_unit"] = exercise_data.get("weight_unit")
             attrs["total_reps"] = exercise_data.get("total_reps")
-            attrs["personal_record_weight"] = exercise_data.get("personal_record_weight")
+            attrs["personal_record_weight"] = exercise_data.get(
+                "personal_record_weight"
+            )
             attrs["personal_record_reps"] = exercise_data.get("personal_record_reps")
 
         # Add duration for timed exercises
         if exercise_data.get("total_duration_seconds") is not None:
-            attrs["total_duration_seconds"] = exercise_data.get("total_duration_seconds")
+            attrs["total_duration_seconds"] = exercise_data.get(
+                "total_duration_seconds"
+            )
 
         # Add distance for cardio exercises
         if exercise_data.get("total_distance") is not None:
             attrs["distance"] = exercise_data.get("total_distance")
             attrs["distance_unit"] = exercise_data.get("distance_unit")
-            attrs["personal_record_distance"] = exercise_data.get("personal_record_distance")
-            attrs["personal_record_distance_unit"] = exercise_data.get("personal_record_distance_unit")
+            attrs["personal_record_distance"] = exercise_data.get(
+                "personal_record_distance"
+            )
+            attrs["personal_record_distance_unit"] = exercise_data.get(
+                "personal_record_distance_unit"
+            )
 
         # Add weekly distance for cardio exercises
         if exercise_data.get("weekly_distance") is not None:
@@ -499,8 +512,12 @@ class HevyMuscleGroupSummarySensor(HevyBaseSensor):
             return {}
         muscle_data = self.coordinator.data.get("muscle_group_data", {})
         return {
-            "last_workout_primary_groups": muscle_data.get("last_workout_primary_groups", []),
-            "last_workout_secondary_groups": muscle_data.get("last_workout_secondary_groups", []),
+            "last_workout_primary_groups": muscle_data.get(
+                "last_workout_primary_groups", []
+            ),
+            "last_workout_secondary_groups": muscle_data.get(
+                "last_workout_secondary_groups", []
+            ),
             "last_workout_date": muscle_data.get("last_workout_date"),
             "days_since_last": muscle_data.get("days_since_last", {}),
             "muscles_due": muscle_data.get("muscles_due", []),

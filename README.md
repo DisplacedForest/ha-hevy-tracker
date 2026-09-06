@@ -6,7 +6,7 @@
 [![Stars](https://img.shields.io/github/stars/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](https://github.com/DisplacedForest/ha-hevy-tracker/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](https://github.com/DisplacedForest/ha-hevy-tracker/commits/main)
 [![License](https://img.shields.io/github/license/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](LICENSE)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.7+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/o7triud67l)
 
 A comprehensive Home Assistant integration for tracking your [Hevy](https://www.hevyapp.com/) workouts, with rich set-level sensor data, personal records, muscle recovery tracking, and dashboard-ready cards.
@@ -78,7 +78,7 @@ The bundled live workout card and native calendar card work alongside your exist
 
 ### Live workout card
 
-The card is included with the integration. After installing or updating to 1.4 and restarting Home Assistant:
+The card is included with the integration and requires Home Assistant 2024.7 or later. After installing or updating to 1.4 and restarting Home Assistant:
 
 1. Enable **Advanced mode** in your Home Assistant profile if Resources is hidden.
 2. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.4.0` with resource type **JavaScript Module**.
@@ -104,6 +104,8 @@ Use `hevy.get_routines` and `hevy.get_exercise_catalog` in **Developer Tools →
 Start from a routine or build a workout with exercises from your catalog. Edit the sets and check each set as you complete it. **Finish** asks for confirmation and sends only checked sets to Hevy.
 
 Home Assistant saves one active session per Hevy integration entry. Refreshing the tablet, reconnecting, or restarting Home Assistant reloads that session. A session keeps the unit system it started with. Changing the integration's unit option affects the next session.
+
+The next-routine suggestion uses the integration's existing rotation data. Hevy's public workout creation API does not link new logs to a routine, so logging from the card does not automatically advance that rotation.
 
 The card requires a connection to Home Assistant to save changes and does not accept offline edits. If a network interruption leaves the result of a finish request uncertain, check Hevy for the workout before choosing to retry or clear the session. Retrying a workout that already reached Hevy can create a duplicate.
 
@@ -635,6 +637,10 @@ entities:
   - calendar.hevy_workout_tracker_workout_calendar
 initial_view: dayGridMonth
 ```
+
+![Native Hevy calendar with example workouts](docs/screenshots/calendar.png)
+
+The screenshot uses example workout data in a local Home Assistant instance.
 
 Your entity ID may differ if you renamed the integration or have more than one Hevy account. Find the actual calendar entity under **Settings → Devices & Services → Hevy Workout Tracker → Entities**.
 

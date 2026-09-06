@@ -88,8 +88,7 @@ async def test_setup_creates_entities_and_unloads(hass) -> None:
         (
             s
             for s in sensor_states
-            if s.entity_id.endswith("workout_count")
-            and "weekly" not in s.entity_id
+            if s.entity_id.endswith("workout_count") and "weekly" not in s.entity_id
         ),
         None,
     )

@@ -8,10 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Bundled workout dashboard card with routine selection, exercise browsing, editable sets, and set completion controls
+- Workout drafts saved in Home Assistant, with restart recovery, account selection, and protection against stale edits from another device
+- Confirmation before sending completed sets to Hevy, saved workout receipts, and explicit recovery for submissions whose outcome could not be confirmed
+- Visual card configuration for favorite routines and exercises, with no input helpers or workout scripts
+- Native calendar dashboard documentation replacing the old calendar workaround
+- Consistent mise checks for formatting, lint, types, tests, and build validation
 - `hevy.get_exercise_catalog` service that returns the cached Hevy exercise catalog sorted by title, so you can look up the exact names `hevy.log_workout` accepts
 - `hevy.get_routines` service that returns your saved routines with full exercise and set detail in your configured unit system. The sets it returns can be passed straight to `hevy.log_workout`
 
 ### Changed
+- Minimum Home Assistant version is now 2024.7 for the bundled card resource
+- Updated development dependencies and corrected existing integration type annotations
+- Routine loading now follows pagination and preserves exercise notes
+- API errors no longer include raw upstream response bodies
 - `hevy.log_workout` now rejects negative weight, reps, duration, and distance values, and accepts RPE as a string or a number
 - `hevy.get_workout_history` and `hevy.log_workout` now raise a proper validation error (instead of a generic one) when the config entry ID does not match a configured Hevy integration
 
@@ -238,3 +248,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type hints for better IDE support
 - Configurable update intervals to manage API usage
 
+
+[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.3.0...HEAD
