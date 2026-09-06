@@ -5,6 +5,9 @@
     "@DisplacedForest"
   ],
   "config_flow": true,
+  "dependencies": [
+    "http"
+  ],
   "documentation": "https://github.com/DisplacedForest/ha-hevy-tracker",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
@@ -12,8 +15,5 @@
   "requirements": [
     "aiohttp>=3.9.0"
   ],
-  "version": "1.4.0",
-  "dependencies": [
-    "http"
-  ]
+  "version": "1.4.0"
 }
