@@ -46,37 +46,36 @@ You should see:
 - `binary_sensor.hevy_worked_out_this_week`
 - Plus individual exercise sensors
 
-## Code Quality
+## Development setup and checks
 
-### Type Checking
+Install mise and Lefthook, then run these commands from the repository root:
 
-```bash
-mypy custom_components/hevy
+```sh
+mise trust
+mise install
+mise run setup
+lefthook install
+mise run check
+mise run ci
 ```
 
-### Linting & Formatting
+`mise run check` checks Python formatting, Ruff lint, integration types, Python tests, and card tests. `mise run ci` adds Python compilation and JavaScript syntax validation. The `Lint` and `Test` jobs in GitHub Actions run the same tasks.
 
-```bash
-ruff check custom_components/hevy
-ruff format custom_components/hevy
-```
+Apply formatting with `.venv/bin/ruff format custom_components/hevy tests`. Run `mise run security` for Semgrep and Python and JavaScript dependency audits. Semgrep runs in an isolated Python 3.13 environment, while the integration tests use Python 3.14.
 
-### Running Tests
+Python tests live in `tests/`. The bundled frontend has browser behavior tests run by `npm test`. Its JavaScript module ships directly in the integration without a separate bundling step.
 
-Install the test dependencies (includes a pinned Home Assistant, pytest, and the
-custom-component test harness), then run pytest from the repo root:
+## Testing the live workout card
 
-```bash
-python3.14 -m venv .venv
-.venv/bin/pip install -r requirements-test.txt
-.venv/bin/pytest
-```
+Copy the integration into a local Home Assistant instance and restart it. Add `/hevy/hevy-workout-card.js?version=1.4.0` as a JavaScript Module resource, then add a `custom:hevy-workout-card` dashboard card.
 
-The test harness tracks current Home Assistant, which requires Python 3.14
-(`brew install python@3.14` on macOS).
+Check routine selection, exercise search, set editing, completion checkboxes, finish confirmation, and canceling a session. Verify that refresh, reconnect, and a Home Assistant restart restore the saved session. Confirm that only completed sets appear in the submitted workout, and that changing the integration units does not reinterpret an existing session.
 
-Tests live in `tests/` and run in CI (`.github/workflows/ci.yml`) on every push
-and pull request. New features should ship with tests.
+Exercise the uncertain submission state with a controlled API timeout. Check that it requires checking Hevy before retrying or clearing the session. Use fixtures for repeatable error and recovery checks. Record real writes separately, since a fixture response cannot prove that Hevy accepted a workout.
+
+## Testing the calendar card
+
+Add Home Assistant's native Calendar card with the Hevy workout calendar entity. Check completed workouts, event details, multiple workouts on one date, and the empty view outside the cached 30-day history. Capture documentation screenshots from this actual Home Assistant card. Use fixture workouts when a real account is unavailable and identify fixture data in the verification report.
 
 ## API Testing
 
@@ -262,9 +261,10 @@ This supports A-B-C rotation training (e.g., lift, rest, lift, rest, lift).
 
 ## Release Process
 
-1. Update version in `manifest.json`
-2. Update CHANGELOG.md
-3. Tag release: `git tag v1.0.0`
-4. Push to GitHub: `git push --tags`
-5. Create GitHub release with notes
-6. HACS will auto-detect new version
+1. Update the version in `custom_components/hevy/manifest.json` and the changelog together. Update the README card resource version when the bundled card changes.
+2. Run `mise run check`, `mise run ci`, and `mise run security`, and record the results.
+3. Open a pull request, obtain independent review, and wait for every hosted check to pass before a squash merge.
+4. Verify CI on the merged commit and smoke-test the integration, saved workout session, bundled card, and native calendar in a local Home Assistant instance using fixture data.
+5. Record whether a real Hevy write was tested. Fixture tests and local Home Assistant checks do not establish that a real account accepted a workout.
+6. Tag the merged version and publish a GitHub release with its notes. HACS detects the release.
+7. Remove the completed branch and worktree.

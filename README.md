@@ -2,6 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/DisplacedForest/ha-hevy-tracker.svg?style=for-the-badge&color=brightgreen)](https://github.com/DisplacedForest/ha-hevy-tracker/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/DisplacedForest/ha-hevy-tracker/ci.yml?branch=main&style=for-the-badge)](https://github.com/DisplacedForest/ha-hevy-tracker/actions/workflows/ci.yml)
 [![Stars](https://img.shields.io/github/stars/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](https://github.com/DisplacedForest/ha-hevy-tracker/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](https://github.com/DisplacedForest/ha-hevy-tracker/commits/main)
 [![License](https://img.shields.io/github/license/DisplacedForest/ha-hevy-tracker?style=for-the-badge)](LICENSE)
@@ -63,6 +64,7 @@ Access via **Devices & Services** → **Hevy Workout Tracker** → **Configure**
 - **Weekly Volume Analysis**: Volume per muscle group with full exercise breakdown
 - **Routine Rotation**: Automatically detects the next workout in your A/B/C rotation
 - **30-Day History**: Service call for full workout history with enriched data
+- **Live Workouts**: Bundled dashboard card with sessions saved in Home Assistant, routine selection, editable sets, and confirmed posting to Hevy
 - **Workout Logging**: Service call that posts a completed workout back to Hevy, in your configured units
 - **Automatic Updates**: Configurable polling interval (5–120 minutes)
 - **Calendar Entity**: Completed workouts appear on the HA calendar with exercise details, volume, and duration. This is a history view (workouts are logged after the fact), not an automation trigger source
@@ -72,7 +74,40 @@ Access via **Devices & Services** → **Hevy Workout Tracker** → **Configure**
 
 ## Dashboard
 
-The integration is designed to power a full workout dashboard. All examples below use [`custom:button-card`](https://github.com/custom-cards/button-card) and [`custom:layout-card`](https://github.com/thomasloven/lovelace-layout-card), both available in HACS.
+The bundled live workout card and native calendar card work alongside your existing dashboard. The stats, recovery, and personal record examples use [`custom:button-card`](https://github.com/custom-cards/button-card) and [`custom:layout-card`](https://github.com/thomasloven/lovelace-layout-card), both available in HACS.
+
+### Live workout card
+
+The card is included with the integration. After installing or updating to 1.4 and restarting Home Assistant:
+
+1. Enable **Advanced mode** in your Home Assistant profile if Resources is hidden.
+2. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.4.0` with resource type **JavaScript Module**.
+3. Add a manual card to your dashboard:
+
+```yaml
+type: custom:hevy-workout-card
+```
+
+With one Hevy integration entry, the card selects it automatically. With several entries, use the account picker or set `config_entry_id` in the card configuration. Optional `routine_ids` and `exercise_ids` lists choose your favorites:
+
+```yaml
+type: custom:hevy-workout-card
+config_entry_id: YOUR_CONFIG_ENTRY_ID
+routine_ids:
+  - YOUR_ROUTINE_ID
+exercise_ids:
+  - 79D0BB3A
+```
+
+Use `hevy.get_routines` and `hevy.get_exercise_catalog` in **Developer Tools → Actions** to find these IDs.
+
+Start from a routine or build a workout with exercises from your catalog. Edit the sets and check each set as you complete it. **Finish** asks for confirmation and sends only checked sets to Hevy.
+
+Home Assistant saves one active session per Hevy integration entry. Refreshing the tablet, reconnecting, or restarting Home Assistant reloads that session. A session keeps the unit system it started with. Changing the integration's unit option affects the next session.
+
+The card requires a connection to Home Assistant to save changes and does not accept offline edits. If a network interruption leaves the result of a finish request uncertain, check Hevy for the workout before choosing to retry or clear the session. Retrying a workout that already reached Hevy can create a duplicate.
+
+### Dashboard examples
 
 <details>
 <summary><b>Hero Stats Grid</b></summary>
@@ -590,69 +625,22 @@ styles:
 </details>
 
 <details>
-<summary><b>30-Day Activity Calendar</b></summary>
+<summary><b>Workout Calendar</b></summary>
+
+Use Home Assistant's built-in Calendar card to see completed workouts. Add a Calendar card from the dashboard editor and select the Hevy **Workout calendar** entity, or use YAML:
 
 ```yaml
-type: custom:button-card
-entity: sensor.hevy_workout_tracker_last_workout_date
-show_name: false
-show_state: false
-show_icon: false
-show_label: false
-tap_action:
-  action: none
-custom_fields:
-  cal: |
-    [[[
-      return (function() {
-        var workoutDates = entity.attributes.workout_dates || [];
-        var wdSet = {};
-        workoutDates.forEach(function(d) { wdSet[d] = true; });
-        var today = new Date();
-        today.setHours(0,0,0,0);
-        var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
-        var todayStr = today.getFullYear() + '-' + pad(today.getMonth()+1) + '-' + pad(today.getDate());
-        var startDate = new Date(today);
-        startDate.setDate(today.getDate() - 29);
-        var dayNames = ['S','M','T','W','T','F','S'];
-        var h = '<div>';
-        h += '<div style="color:#ADB5BD;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Last 30 Days</div>';
-        h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;">';
-        for (var di = 0; di < 7; di++) {
-          h += '<div style="text-align:center;color:#6C757D;font-size:10px;font-weight:600;padding:2px 0;">' + dayNames[di] + '</div>';
-        }
-        var firstDow = startDate.getDay();
-        for (var j = 0; j < firstDow; j++) { h += '<div></div>'; }
-        for (var i = 0; i < 30; i++) {
-          var dd = new Date(startDate);
-          dd.setDate(startDate.getDate() + i);
-          var dStr = dd.getFullYear() + '-' + pad(dd.getMonth()+1) + '-' + pad(dd.getDate());
-          var isToday = dStr === todayStr;
-          var isWorkout = wdSet[dStr] === true;
-          var dayNum = dd.getDate();
-          var bg = '#2B3035'; var clr = '#6C757D'; var fw = '400'; var bdr = 'none'; var shd = 'none';
-          if (isWorkout && isToday) { bg = '#4ECDC4'; clr = '#1A1D20'; fw = '700'; shd = '0 0 8px rgba(78,205,196,0.4)'; }
-          else if (isWorkout) { bg = '#4ECDC4'; clr = '#1A1D20'; fw = '700'; }
-          else if (isToday) { bg = '#2B3035'; clr = '#F8F9FA'; fw = '500'; bdr = '2px solid #4ECDC4'; }
-          h += '<div style="text-align:center;padding:6px 0;border-radius:8px;font-size:12px;background:' + bg + ';color:' + clr + ';font-weight:' + fw + ';border:' + bdr + ';box-shadow:' + shd + ';">' + dayNum + '</div>';
-        }
-        h += '</div></div>';
-        return h;
-      })();
-    ]]]
-styles:
-  grid:
-    - grid-template-areas: '"cal"'
-    - grid-template-columns: 1fr
-  card:
-    - background: "#343A40"
-    - border-radius: 12px
-    - padding: 18px
-    - margin-top: 8px
-  custom_fields:
-    cal:
-      - white-space: normal
+type: calendar
+entities:
+  - calendar.hevy_workout_tracker_workout_calendar
+initial_view: dayGridMonth
 ```
+
+Your entity ID may differ if you renamed the integration or have more than one Hevy account. Find the actual calendar entity under **Settings → Devices & Services → Hevy Workout Tracker → Entities**.
+
+Select a workout to see its start and end time, exercises, set counts, and weighted volume in your configured units. The calendar uses the integration's cached 30-day workout history and refreshes with its polling interval. Multiple workouts on the same day appear as separate events.
+
+This calendar shows completed workouts. It does not schedule future workouts or provide workout-start automation triggers. Dates outside the cached history can be empty even when older workouts exist in Hevy.
 
 </details>
 
@@ -1078,6 +1066,10 @@ If multiple workouts fall on the same date, only the most recent is included.
 - Wait one polling cycle after logging a new exercise type
 
 ---
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and verification commands, and [DEVELOPMENT.md](DEVELOPMENT.md) for testing in Home Assistant.
 
 ## Support
 

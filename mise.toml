@@ -1,0 +1,42 @@
+[tools]
+python = "3.14.6"
+node = "24.20.0"
+uv = "0.11.31"
+
+[tasks.setup]
+run = [
+  "uv venv --seed --allow-existing --python 3.14 .venv",
+  ".venv/bin/python -m pip install -r requirements-dev.txt",
+  "npm ci",
+]
+
+[tasks.fmt]
+run = ".venv/bin/ruff format --check custom_components/hevy tests"
+
+[tasks.lint]
+run = ".venv/bin/ruff check custom_components/hevy tests"
+
+[tasks.typecheck]
+run = ".venv/bin/mypy --follow-imports=silent --ignore-missing-imports custom_components/hevy"
+
+[tasks.test]
+run = [".venv/bin/pytest -q", "npm test"]
+
+[tasks.build]
+run = [
+  ".venv/bin/python -m compileall -q custom_components/hevy",
+  "node --check custom_components/hevy/frontend/hevy-workout-card.js",
+]
+
+[tasks.check]
+depends = ["fmt", "lint", "typecheck", "test"]
+
+[tasks.ci]
+depends = ["check", "build"]
+
+[tasks.security]
+run = [
+  "uvx --python 3.13 semgrep==1.175.0 scan --config auto --error custom_components/hevy",
+  ".venv/bin/pip-audit",
+  "npm audit",
+]
