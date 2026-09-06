@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hevy.get_routines` service that returns your saved routines with full exercise and set detail in your configured unit system. The sets it returns can be passed straight to `hevy.log_workout`
 
 ### Changed
+- Workout confirmations receive focus and scroll into view when opened
 - Minimum Home Assistant version is now 2024.7 for the bundled card resource
 - Updated development dependencies and corrected existing integration type annotations
 - Routine loading now follows pagination and preserves exercise notes

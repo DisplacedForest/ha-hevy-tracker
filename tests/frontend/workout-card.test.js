@@ -337,3 +337,21 @@ test("refreshes after Home Assistant connection reconnects", async (t) => {
   assert.equal(ctx.calls.length, before + 1);
   assert.equal(ctx.card._draft.title, "Connection recovered");
 });
+
+
+test("finish brings its confirmation into view without submitting the workout", async (t) => {
+  const initial = board();
+  initial.session.exercises[0].sets[0].completed = true;
+  const { dom, card, calls, click } = await setup(t, initial);
+  let scrolled;
+  dom.window.HTMLElement.prototype.scrollIntoView = function (options) {
+    scrolled = { element: this, options };
+  };
+  click("finish");
+  const panel = card.shadowRoot.querySelector(".finish-panel");
+  assert.equal(card.shadowRoot.activeElement, panel);
+  assert.equal(scrolled.element, panel);
+  assert.equal(scrolled.options.block, "nearest");
+  assert.match(panel.textContent, /Finish and send to Hevy/);
+  assert.equal(calls.some((call) => call.service === "finish_workout"), false);
+});

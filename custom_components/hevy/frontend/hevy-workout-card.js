@@ -362,7 +362,7 @@ class HevyWorkoutCard extends HTMLElement {
     const exerciseIndex = Number(button.dataset.exercise);
     if (action === "refresh") { this._error = ""; void this._load(); }
     else if (action === "retry-save") { this._saveError = false; this._error = ""; this._renderError(); void this._save(); }
-    else if (action === "load-saved") { this._confirm = "reload"; this._render(); }
+    else if (action === "load-saved") this._showConfirmation("reload");
     else if (action === "reload-confirm") {
       this._draft = this._board.session ? copy(this._board.session) : null;
       this._editVersion = 0;
@@ -401,20 +401,27 @@ class HevyWorkoutCard extends HTMLElement {
       this._render();
     }
     else if (action === "remove-exercise") {
-      this._confirm = `remove:${exerciseIndex}`;
-      this._render();
+      this._showConfirmation(`remove:${exerciseIndex}`);
     }
     else if (action === "remove-confirm") {
       this._draft.exercises.splice(exerciseIndex, 1);
       this._changed();
       this._render();
     }
-    else if (["finish", "cancel", "retry", "discard"].includes(action)) { this._confirm = action; this._render(); }
+    else if (["finish", "cancel", "retry", "discard"].includes(action)) this._showConfirmation(action);
     else if (action === "dismiss") { this._confirm = ""; this._render(); }
     else if (action === "finish-confirm") void this._action("finish_workout");
     else if (action === "cancel-confirm") void this._action("cancel_workout");
     else if (action === "retry-confirm") void this._action("resolve_workout", { resolution: "retry" });
     else if (action === "discard-confirm") void this._action("resolve_workout", { resolution: "discard" });
+  }
+
+  _showConfirmation(action) {
+    this._confirm = action;
+    this._render();
+    const panel = this.shadowRoot.querySelector(".finish-panel");
+    panel?.focus({ preventScroll: true });
+    panel?.scrollIntoView?.({ block: "nearest", behavior: "instant" });
   }
 
   _ordered(items, favorites = []) {
@@ -519,7 +526,7 @@ class HevyWorkoutCard extends HTMLElement {
       extra = `data-exercise="${index}"`;
       label = "Remove exercise";
     }
-    return `<div class="finish-panel" role="region" aria-label="${escapeHTML(title)}"><h2>${escapeHTML(title)}</h2><p>${escapeHTML(text)}</p><div class="row actions"><button data-action="dismiss" ${this._actionBusy ? "disabled" : ""}>Go back</button><button class="primary" data-action="${action}" ${extra} ${this._actionBusy ? "disabled" : ""}>${escapeHTML(label)}</button></div></div>`;
+    return `<div class="finish-panel" tabindex="-1" role="region" aria-label="${escapeHTML(title)}"><h2>${escapeHTML(title)}</h2><p>${escapeHTML(text)}</p><div class="row actions"><button data-action="dismiss" ${this._actionBusy ? "disabled" : ""}>Go back</button><button class="primary" data-action="${action}" ${extra} ${this._actionBusy ? "disabled" : ""}>${escapeHTML(label)}</button></div></div>`;
   }
 
   _render() {
