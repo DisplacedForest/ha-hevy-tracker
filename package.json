@@ -1,0 +1,11 @@
+{
+  "name": "hevy-workout-card-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/frontend/*.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}

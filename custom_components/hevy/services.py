@@ -1,4 +1,5 @@
 """Service handlers for the Hevy Workout Tracker integration."""
+
 from __future__ import annotations
 
 import logging
@@ -9,7 +10,6 @@ import voluptuous as vol
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
-    ServiceResponse,
     SupportsResponse,
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -58,8 +58,7 @@ CONFIG_ENTRY_ONLY_SCHEMA = vol.Schema(
 def _set_has_measurement(value: dict[str, Any]) -> dict[str, Any]:
     if not any(value.get(field) is not None for field in MEASUREMENT_FIELDS):
         raise vol.Invalid(
-            "Each set needs at least one of weight, reps, duration_seconds, "
-            "or distance"
+            "Each set needs at least one of weight, reps, duration_seconds, or distance"
         )
     return value
 
@@ -84,9 +83,7 @@ EXERCISE_SCHEMA = vol.Schema(
     {
         vol.Required("name"): cv.string,
         vol.Optional("notes"): cv.string,
-        vol.Required("sets"): vol.All(
-            cv.ensure_list, vol.Length(min=1), [SET_SCHEMA]
-        ),
+        vol.Required("sets"): vol.All(cv.ensure_list, vol.Length(min=1), [SET_SCHEMA]),
     }
 )
 
@@ -99,9 +96,7 @@ LOG_WORKOUT_SCHEMA = vol.Schema(
         ),
         vol.Optional("start_time"): cv.datetime,
         vol.Optional("end_time"): cv.datetime,
-        vol.Optional("duration_minutes"): vol.All(
-            vol.Coerce(int), vol.Range(min=1)
-        ),
+        vol.Optional("duration_minutes"): vol.All(vol.Coerce(int), vol.Range(min=1)),
         vol.Optional("description"): cv.string,
         vol.Optional("is_private", default=False): cv.boolean,
     }
@@ -128,9 +123,7 @@ def _to_meters(
     return round(distance / METERS_TO_MILES)
 
 
-def _resolve_template_id(
-    coordinator: HevyDataUpdateCoordinator, name: str
-) -> str:
+def _resolve_template_id(coordinator: HevyDataUpdateCoordinator, name: str) -> str:
     templates = coordinator.exercise_templates
 
     for template_id, template in templates.items():
@@ -160,7 +153,7 @@ def _resolve_template_id(
 def async_register_services(hass: HomeAssistant) -> None:
     """Register Hevy services."""
 
-    async def handle_get_workout_history(call: ServiceCall) -> ServiceResponse:
+    async def handle_get_workout_history(call: ServiceCall) -> dict[str, Any]:
         """Handle the get_workout_history service call."""
         days = call.data.get("days", 30)
         config_entry_id = call.data["config_entry_id"]
@@ -198,12 +191,8 @@ def async_register_services(hass: HomeAssistant) -> None:
 
             if start_time and end_time:
                 try:
-                    start_dt = datetime.fromisoformat(
-                        start_time.replace("Z", "+00:00")
-                    )
-                    end_dt = datetime.fromisoformat(
-                        end_time.replace("Z", "+00:00")
-                    )
+                    start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    end_dt = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
                     duration_minutes = round(
                         (end_dt - start_dt).total_seconds() / 60, 1
                     )
@@ -214,9 +203,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             if start_time:
                 try:
                     day_str = dt_util.as_local(
-                        datetime.fromisoformat(
-                            start_time.replace("Z", "+00:00")
-                        )
+                        datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                     ).strftime("%Y-%m-%d")
                     if day_str not in workout_days:
                         workout_days.append(day_str)
@@ -249,37 +236,43 @@ def async_register_services(hass: HomeAssistant) -> None:
                 for set_data in sets:
                     weight = coordinator._convert_weight(set_data.get("weight_kg"))
                     reps = set_data.get("reps")
-                    sets_converted.append({
-                        "type": set_data.get("type", "normal"),
-                        "weight": weight,
-                        "weight_unit": coordinator._get_weight_unit(),
-                        "reps": reps,
-                        "duration_seconds": set_data.get("duration_seconds"),
-                    })
+                    sets_converted.append(
+                        {
+                            "type": set_data.get("type", "normal"),
+                            "weight": weight,
+                            "weight_unit": coordinator._get_weight_unit(),
+                            "reps": reps,
+                            "duration_seconds": set_data.get("duration_seconds"),
+                        }
+                    )
                     if reps:
                         ex_total_reps += reps
 
-                exercises_response.append({
-                    "name": exercise.get("title", "Unknown"),
-                    "muscle_group": muscle_group,
-                    "sets": sets_converted,
-                    "best_set": coordinator._get_best_set_string(sets),
-                    "total_reps": ex_total_reps if ex_total_reps > 0 else None,
-                    "notes": exercise.get("notes"),
-                })
+                exercises_response.append(
+                    {
+                        "name": exercise.get("title", "Unknown"),
+                        "muscle_group": muscle_group,
+                        "sets": sets_converted,
+                        "best_set": coordinator._get_best_set_string(sets),
+                        "total_reps": ex_total_reps if ex_total_reps > 0 else None,
+                        "notes": exercise.get("notes"),
+                    }
+                )
 
-            workouts_response.append({
-                "id": workout.get("id"),
-                "title": workout.get("title"),
-                "date": start_time,
-                "start_time": start_time,
-                "end_time": end_time,
-                "duration_minutes": duration_minutes,
-                "total_volume": workout_volume,
-                "routine_id": workout.get("routine_id"),
-                "muscle_groups": muscle_groups,
-                "exercises": exercises_response,
-            })
+            workouts_response.append(
+                {
+                    "id": workout.get("id"),
+                    "title": workout.get("title"),
+                    "date": start_time,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "duration_minutes": duration_minutes,
+                    "total_volume": workout_volume,
+                    "routine_id": workout.get("routine_id"),
+                    "muscle_groups": muscle_groups,
+                    "exercises": exercises_response,
+                }
+            )
 
         num_workouts = len(workouts_response)
         summary = {
@@ -299,7 +292,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             "workouts": workouts_response,
         }
 
-    async def handle_log_workout(call: ServiceCall) -> ServiceResponse:
+    async def handle_log_workout(call: ServiceCall) -> dict[str, Any]:
         """Handle the log_workout service call."""
         config_entry_id = call.data["config_entry_id"]
 
@@ -314,22 +307,26 @@ def async_register_services(hass: HomeAssistant) -> None:
 
             sets_payload: list[dict[str, Any]] = []
             for set_data in exercise["sets"]:
-                sets_payload.append({
-                    "type": set_data["type"],
-                    "weight_kg": _to_kg(coordinator, set_data.get("weight")),
-                    "reps": set_data.get("reps"),
-                    "distance_meters": _to_meters(
-                        coordinator, set_data.get("distance")
-                    ),
-                    "duration_seconds": set_data.get("duration_seconds"),
-                    "rpe": set_data.get("rpe"),
-                })
+                sets_payload.append(
+                    {
+                        "type": set_data["type"],
+                        "weight_kg": _to_kg(coordinator, set_data.get("weight")),
+                        "reps": set_data.get("reps"),
+                        "distance_meters": _to_meters(
+                            coordinator, set_data.get("distance")
+                        ),
+                        "duration_seconds": set_data.get("duration_seconds"),
+                        "rpe": set_data.get("rpe"),
+                    }
+                )
 
-            exercises_payload.append({
-                "exercise_template_id": template_id,
-                "notes": exercise.get("notes"),
-                "sets": sets_payload,
-            })
+            exercises_payload.append(
+                {
+                    "exercise_template_id": template_id,
+                    "notes": exercise.get("notes"),
+                    "sets": sets_payload,
+                }
+            )
 
         end_time = call.data.get("end_time") or dt_util.now()
         start_time = call.data.get("start_time")
@@ -367,7 +364,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             "title": result.get("title"),
         }
 
-    async def handle_get_exercise_catalog(call: ServiceCall) -> ServiceResponse:
+    async def handle_get_exercise_catalog(call: ServiceCall) -> dict[str, Any]:
         config_entry_id = call.data["config_entry_id"]
 
         if config_entry_id not in hass.data.get(DOMAIN, {}):
@@ -390,7 +387,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             "exercises": exercises,
         }
 
-    async def handle_get_routines(call: ServiceCall) -> ServiceResponse:
+    async def handle_get_routines(call: ServiceCall) -> dict[str, Any]:
         config_entry_id = call.data["config_entry_id"]
 
         if config_entry_id not in hass.data.get(DOMAIN, {}):
@@ -421,17 +418,21 @@ def async_register_services(hass: HomeAssistant) -> None:
                         set_response["distance"] = distance
                     sets_response.append(set_response)
 
-                exercises_response.append({
-                    "name": exercise.get("name"),
-                    "exercise_template_id": exercise.get("exercise_template_id"),
-                    "sets": sets_response,
-                })
+                exercises_response.append(
+                    {
+                        "name": exercise.get("name"),
+                        "exercise_template_id": exercise.get("exercise_template_id"),
+                        "sets": sets_response,
+                    }
+                )
 
-            routines_response.append({
-                "id": routine.get("id"),
-                "title": routine.get("title"),
-                "exercises": exercises_response,
-            })
+            routines_response.append(
+                {
+                    "id": routine.get("id"),
+                    "title": routine.get("title"),
+                    "exercises": exercises_response,
+                }
+            )
 
         return {
             "count": len(routines_response),

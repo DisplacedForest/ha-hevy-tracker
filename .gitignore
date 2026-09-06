@@ -116,3 +116,6 @@ dmypy.json
 .CLAUDE.local.md
 CLAUDE.local.md
 .claude/
+.worktrees/
+node_modules/
+.ruff_cache/

@@ -105,3 +105,154 @@ log_workout:
       default: false
       selector:
         boolean:
+
+get_workout_board:
+  name: Get workout board
+  description: Returns loaded accounts, routines, exercises, units, and the saved
+    workout.
+  fields:
+    config_entry_id:
+      name: Hevy account
+      required: false
+      selector:
+        config_entry:
+          integration: hevy
+start_workout:
+  name: Start workout
+  description: Saves a new workout draft. Existing drafts must be resumed or cleared
+    first.
+  fields:
+    config_entry_id:
+      name: Hevy account
+      required: true
+      selector:
+        config_entry:
+          integration: hevy
+    routine_id:
+      name: Routine ID
+      selector:
+        text: null
+    title:
+      name: Title
+      selector:
+        text: null
+update_workout:
+  name: Update workout
+  description: Saves the full workout draft. Stale revisions are rejected to protect
+    changes from other devices.
+  fields:
+    config_entry_id:
+      name: Hevy account
+      required: true
+      selector:
+        config_entry:
+          integration: hevy
+    session_id:
+      name: Session ID
+      required: true
+      selector:
+        text: null
+    revision:
+      name: Revision
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
+    title:
+      name: Title
+      required: true
+      selector:
+        text: null
+    is_private:
+      name: Private workout
+      required: true
+      selector:
+        boolean: null
+    exercises:
+      name: Exercises
+      required: true
+      selector:
+        object: null
+finish_workout:
+  name: Finish workout
+  description: Sends only checked sets to Hevy. Confirm with the person logging before
+    calling. An uncertain submission must be checked in Hevy before any retry.
+  fields:
+    config_entry_id:
+      name: Hevy account
+      required: true
+      selector:
+        config_entry:
+          integration: hevy
+    session_id:
+      name: Session ID
+      required: true
+      selector:
+        text: null
+    revision:
+      name: Revision
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
+cancel_workout:
+  name: Clear workout
+  description: Clears an active draft or saved receipt. This does not delete workouts
+    from Hevy. Confirm before clearing a draft.
+  fields:
+    config_entry_id:
+      name: Hevy account
+      required: true
+      selector:
+        config_entry:
+          integration: hevy
+    session_id:
+      name: Session ID
+      required: true
+      selector:
+        text: null
+    revision:
+      name: Revision
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
+resolve_workout:
+  name: Resolve workout submission
+  description: Use only after checking Hevy. Choose retry only when the workout is
+    absent, or discard to clear the local draft. This does not delete a workout from
+    Hevy.
+  fields:
+    config_entry_id:
+      name: Hevy account
+      required: true
+      selector:
+        config_entry:
+          integration: hevy
+    session_id:
+      name: Session ID
+      required: true
+      selector:
+        text: null
+    revision:
+      name: Revision
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
+    resolution:
+      name: Resolution
+      required: true
+      selector:
+        select:
+          options:
+          - retry
+          - discard

@@ -114,9 +114,7 @@ class TestSchema:
         with pytest.raises(vol.Invalid):
             await _log(
                 hass,
-                exercises=[
-                    {"name": "Bench Press", "sets": [{"reps": 5, "rpe": 8.2}]}
-                ],
+                exercises=[{"name": "Bench Press", "sets": [{"reps": 5, "rpe": 8.2}]}],
             )
 
     async def test_valid_rpe_accepted(self, hass, imperial_setup) -> None:
@@ -159,9 +157,7 @@ class TestSchema:
         with pytest.raises(vol.Invalid):
             await _log(
                 hass,
-                exercises=[
-                    {"name": "Running", "sets": [{"duration_seconds": -5}]}
-                ],
+                exercises=[{"name": "Running", "sets": [{"duration_seconds": -5}]}],
             )
         imperial_setup.client.create_workout.assert_not_awaited()
 
@@ -229,9 +225,7 @@ class TestConversion:
     async def test_metric_weight_passthrough(self, hass, metric_setup) -> None:
         await _log(
             hass,
-            exercises=[
-                {"name": "Bench Press", "sets": [{"weight": 102.5, "reps": 5}]}
-            ],
+            exercises=[{"name": "Bench Press", "sets": [{"weight": 102.5, "reps": 5}]}],
         )
         payload = metric_setup.client.create_workout.await_args.args[0]
         assert payload["workout"]["exercises"][0]["sets"][0]["weight_kg"] == 102.5
@@ -328,9 +322,7 @@ class TestPayload:
             }
         }
 
-    async def test_description_omitted_when_absent(
-        self, hass, imperial_setup
-    ) -> None:
+    async def test_description_omitted_when_absent(self, hass, imperial_setup) -> None:
         await _log(hass)
         payload = imperial_setup.client.create_workout.await_args.args[0]
         assert "description" not in payload["workout"]
@@ -365,27 +357,21 @@ class TestResponseAndErrors:
         response = await _log(hass)
         assert response == {"workout_id": "w-123", "title": "Push Day"}
 
-    async def test_handles_nested_workout_response(
-        self, hass, imperial_setup
-    ) -> None:
+    async def test_handles_nested_workout_response(self, hass, imperial_setup) -> None:
         imperial_setup.client.create_workout = AsyncMock(
             return_value={"workout": {"id": "w-9", "title": "Leg Day"}}
         )
         response = await _log(hass)
         assert response == {"workout_id": "w-9", "title": "Leg Day"}
 
-    async def test_handles_list_workout_response(
-        self, hass, imperial_setup
-    ) -> None:
+    async def test_handles_list_workout_response(self, hass, imperial_setup) -> None:
         imperial_setup.client.create_workout = AsyncMock(
             return_value={"workout": [{"id": "w-7", "title": "Pull Day"}]}
         )
         response = await _log(hass)
         assert response == {"workout_id": "w-7", "title": "Pull Day"}
 
-    async def test_refresh_requested_after_success(
-        self, hass, imperial_setup
-    ) -> None:
+    async def test_refresh_requested_after_success(self, hass, imperial_setup) -> None:
         await _log(hass)
         imperial_setup.async_request_refresh.assert_awaited_once()
 
@@ -545,9 +531,7 @@ class TestGetRoutines:
         ]
         assert push_day["exercises"][1]["sets"][0]["distance"] == 4.99
 
-    async def test_sets_round_trip_into_log_workout(
-        self, hass, imperial_setup
-    ) -> None:
+    async def test_sets_round_trip_into_log_workout(self, hass, imperial_setup) -> None:
         await imperial_setup.fetch_routines()
         response = await _routines(hass)
         push_day = response["routines"][0]

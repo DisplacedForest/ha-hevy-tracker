@@ -15,23 +15,18 @@ jobs:
     name: Lint
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: requirements-test.txt
-      - run: pip install -r requirements-test.txt
-      - run: ruff check custom_components/hevy tests
+      - uses: jdx/mise-action@v4
+      - run: mise run setup
+      - run: mise run fmt
+      - run: mise run lint
+      - run: mise run typecheck
 
   test:
     runs-on: ubuntu-latest
     name: Test
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: requirements-test.txt
-      - run: pip install -r requirements-test.txt
-      - run: pytest -q
+      - uses: jdx/mise-action@v4
+      - run: mise run setup
+      - run: mise run test
+      - run: mise run build

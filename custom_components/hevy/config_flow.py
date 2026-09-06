@@ -1,4 +1,5 @@
 """Config flow for Hevy Workout Tracker integration."""
+
 from __future__ import annotations
 
 import logging
@@ -6,8 +7,8 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import HevyApiClient, HevyApiError, HevyAuthError
@@ -26,7 +27,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-async def validate_api_key(hass: HomeAssistant, api_key: str) -> dict[str, str]:
+async def validate_api_key(hass: HomeAssistant, api_key: str) -> dict[str, Any]:
     """Validate the API key by attempting to authenticate.
 
     Args:
@@ -59,7 +60,7 @@ class HevyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step.
 
         Args:
@@ -127,7 +128,7 @@ class HevyOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Manage the options.
 
         Args:

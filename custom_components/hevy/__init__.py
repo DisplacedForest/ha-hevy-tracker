@@ -1,12 +1,16 @@
 """The Hevy Workout Tracker integration."""
+
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from pathlib import Path
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import HevyApiClient
@@ -20,10 +24,26 @@ from .const import (
 )
 from .coordinator import HevyDataUpdateCoordinator
 from .services import async_register_services, async_unregister_services
+from .session_services import register_session_services, unregister_session_services
+from .workout_session import WorkoutSession
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                "/hevy/hevy-workout-card.js",
+                str(Path(__file__).parent / "frontend" / "hevy-workout-card.js"),
+                False,
+            )
+        ]
+    )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -58,6 +78,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
+    coordinator.workout_session = WorkoutSession(hass, entry.entry_id, coordinator)
+    await coordinator.workout_session.load()
+
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     # Set up platforms
@@ -65,6 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register services
     async_register_services(hass)
+    register_session_services(hass)
 
     # Register update listener for options changes
     entry.async_on_unload(entry.add_update_listener(update_listener))
@@ -85,8 +109,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
+        coordinator = hass.data[DOMAIN][entry.entry_id]
+        if coordinator.workout_session:
+            await coordinator.workout_session.close()
         hass.data[DOMAIN].pop(entry.entry_id)
         async_unregister_services(hass)
+        unregister_session_services(hass)
 
     return unload_ok
 

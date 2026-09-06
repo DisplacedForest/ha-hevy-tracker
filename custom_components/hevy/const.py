@@ -39,7 +39,7 @@ SENSOR_WEEKLY_DISTANCE = "weekly_distance"
 SENSOR_NEXT_WORKOUT = "next_workout"
 
 MUSCLE_DUE_THRESHOLD_DAYS = 3
-MAX_WORKOUT_PAGES = 10       # Safety cap for pagination
+MAX_WORKOUT_PAGES = 10  # Safety cap for pagination
 WORKOUT_HISTORY_DAYS = 30
 
 # API Endpoints
