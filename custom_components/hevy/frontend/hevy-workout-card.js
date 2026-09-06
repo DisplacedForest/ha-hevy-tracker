@@ -420,8 +420,11 @@ class HevyWorkoutCard extends HTMLElement {
     this._confirm = action;
     this._render();
     const panel = this.shadowRoot.querySelector(".finish-panel");
-    panel?.focus({ preventScroll: true });
-    panel?.scrollIntoView?.({ block: "nearest", behavior: "instant" });
+    requestAnimationFrame(() => {
+      if (!panel?.isConnected) return;
+      panel.focus({ preventScroll: true });
+      panel.scrollIntoView?.({ block: "nearest", behavior: "instant" });
+    });
   }
 
   _ordered(items, favorites = []) {

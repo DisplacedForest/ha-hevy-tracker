@@ -24,7 +24,7 @@ const board = (savedSession = session()) => ({
 });
 
 async function setup(t, initial = board(), override) {
-  const dom = new JSDOM("<!doctype html><body></body>", { runScripts: "dangerously", url: "https://ha.example/" });
+  const dom = new JSDOM("<!doctype html><body></body>", { runScripts: "dangerously", pretendToBeVisual: true, url: "https://ha.example/" });
   dom.window.eval(source);
   let state = clone(initial);
   const calls = [];
@@ -348,6 +348,7 @@ test("finish brings its confirmation into view without submitting the workout", 
     scrolled = { element: this, options };
   };
   click("finish");
+  await new Promise((resolve) => dom.window.requestAnimationFrame(resolve));
   const panel = card.shadowRoot.querySelector(".finish-panel");
   assert.equal(card.shadowRoot.activeElement, panel);
   assert.equal(scrolled.element, panel);
