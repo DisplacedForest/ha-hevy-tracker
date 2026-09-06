@@ -1,11 +1,11 @@
-# Testing the 1.4 candidate
+# Testing Hevy 1.4
 
-This is an unpublished test build. Version 1.3.0 remains the latest release. The 1.4 pull request stays open until testing is complete.
+Use this checklist to verify the workout card on your Home Assistant installation. Back up the integration before updating so you can roll back if needed.
 
 ## Install
 
 1. Back up the existing `config/custom_components/hevy` folder in your Home Assistant installation.
-2. Extract the candidate ZIP and replace that folder with its `custom_components/hevy` folder. Keep your existing Home Assistant configuration.
+2. Update to 1.4.0 through HACS, or extract the release source ZIP and replace that folder with its `custom_components/hevy` folder. Keep your existing Home Assistant configuration.
 3. Restart Home Assistant.
 4. In your profile, enable Advanced mode. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.4.0` as a **JavaScript Module**. If this resource already exists, update its URL and reload the browser.
 5. Add a manual dashboard card with:

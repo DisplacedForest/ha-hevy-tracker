@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-06
+
 ### Added
 - Bundled workout dashboard card with routine selection, exercise browsing, editable sets, and set completion controls
 - Workout drafts saved in Home Assistant, with restart recovery, account selection, and protection against stale edits from another device
@@ -250,4 +252,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable update intervals to manage API usage
 
 
-[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.3.0...v1.4.0
