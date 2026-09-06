@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hevy workout card preview</title>
+  <style>
+    :root { color-scheme: light; --primary-color: #17766d; --primary-text-color: #20332f; --secondary-text-color: #65766f; --secondary-background-color: #f3f6f4; --divider-color: #dce5df; }
+    body { margin: 0; padding: 32px 16px; background: #e9efeb; font-family: system-ui, sans-serif; }
+    .page { max-width: 620px; margin: auto; }
+    .preview-label { margin: 0 0 14px; color: #65766f; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+    @media (prefers-color-scheme: dark) { :root { color-scheme: dark; --primary-color: #46958a; --primary-text-color: #ebf1ee; --secondary-text-color: #a1b2aa; --secondary-background-color: #25372f; --divider-color: #3b4d44; --ha-card-background: #1a2b23; } body { background: #122019; } }
+    @media (max-width: 450px) { body { padding: 16px 8px; } }
+  </style>
+</head>
+<body>
+  <div class="page"><p class="preview-label">Interactive fixture · No data sent to Hevy</p><hevy-workout-card></hevy-workout-card></div>
+  <script type="module">
+    import "../../custom_components/hevy/frontend/hevy-workout-card.js";
+    const exercises = [
+      { id: "bench", title: "Bench Press (Barbell)", type: "weight_reps", muscle_group: "chest" },
+      { id: "row", title: "Bent Over Row (Dumbbell)", type: "weight_reps", muscle_group: "back" },
+      { id: "run", title: "Running", type: "distance_duration", muscle_group: "cardio" },
+      { id: "plank", title: "Plank", type: "duration", muscle_group: "abdominals" },
+    ];
+    const routines = [{ id: "upper", title: "Upper body A", exercises: [
+      { exercise_template_id: "bench", name: "Bench Press (Barbell)", sets: [1, 2, 3].map(() => ({ type: "normal", weight: 60, reps: 8, completed: false })) },
+      { exercise_template_id: "row", name: "Bent Over Row (Dumbbell)", sets: [1, 2, 3].map(() => ({ type: "normal", weight: 22, reps: 10, completed: false })) },
+    ] }];
+    let session = JSON.parse(localStorage.getItem("hevy-card-preview") || "null");
+    const card = document.querySelector("hevy-workout-card");
+    card.setConfig({ type: "custom:hevy-workout-card", title: "Today's training", config_entry_id: "preview" });
+    card.hass = {
+      connected: true,
+      callWS: async ({ service, service_data: data }) => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (service === "get_workout_board") return { response: { accounts: [{ config_entry_id: "preview", title: "Preview" }], config_entry_id: "preview", weight_unit: "kg", distance_unit: "km", exercises, routines, session: structuredClone(session), next_routine_id: "upper" } };
+        if (service === "start_workout") session = { id: crypto.randomUUID(), revision: 1, status: "active", title: data.routine_id ? "Upper body A" : "Workout", start_time: new Date().toISOString(), weight_unit: "kg", distance_unit: "km", is_private: true, exercises: data.routine_id ? structuredClone(routines[0].exercises) : [] };
+        if (service === "update_workout") {
+          if (data.revision !== session.revision) throw new Error("This workout changed on another screen.");
+          session = { ...session, ...data, revision: session.revision + 1 };
+        }
+        if (service === "finish_workout") session = { ...session, revision: session.revision + 1, status: "finished", workout_id: "preview-workout" };
+        if (service === "cancel_workout" || (service === "resolve_workout" && data.resolution === "discard")) session = null;
+        if (service === "resolve_workout" && data.resolution === "retry") session = { ...session, revision: session.revision + 1, status: "active" };
+        localStorage.setItem("hevy-card-preview", JSON.stringify(session));
+        return { response: { session: structuredClone(session) } };
+      },
+    };
+  </script>
+</body>
+</html>
