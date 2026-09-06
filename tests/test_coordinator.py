@@ -88,9 +88,7 @@ class TestGetBestSetString:
 
     async def test_distance_with_duration(self, imperial_coordinator) -> None:
         sets = [{"distance_meters": 5000, "duration_seconds": 1500}]
-        assert (
-            imperial_coordinator._get_best_set_string(sets) == "3.11 mi in 25m 00s"
-        )
+        assert imperial_coordinator._get_best_set_string(sets) == "3.11 mi in 25m 00s"
 
     async def test_bodyweight_reps_only(self, imperial_coordinator) -> None:
         sets = [{"weight_kg": None, "reps": 20}]
@@ -249,15 +247,11 @@ class TestFetch30DayWorkouts:
         now = dt_util.utcnow()
         mock_client.get_workouts.side_effect = [
             {
-                "workouts": [
-                    {"id": "w1", "start_time": _iso(now - timedelta(days=1))}
-                ],
+                "workouts": [{"id": "w1", "start_time": _iso(now - timedelta(days=1))}],
                 "page_count": 2,
             },
             {
-                "workouts": [
-                    {"id": "w2", "start_time": _iso(now - timedelta(days=2))}
-                ],
+                "workouts": [{"id": "w2", "start_time": _iso(now - timedelta(days=2))}],
                 "page_count": 2,
             },
         ]
@@ -265,9 +259,7 @@ class TestFetch30DayWorkouts:
         assert [w["id"] for w in result] == ["w1", "w2"]
         assert mock_client.get_workouts.call_count == 2
 
-    async def test_stops_on_empty_page(
-        self, imperial_coordinator, mock_client
-    ) -> None:
+    async def test_stops_on_empty_page(self, imperial_coordinator, mock_client) -> None:
         mock_client.get_workouts.return_value = {"workouts": [], "page_count": 5}
         result = await imperial_coordinator._fetch_30_day_workouts()
         assert result == []
@@ -282,6 +274,7 @@ class TestFetchRoutines:
         assert push_day["title"] == "Push Day"
         assert push_day["exercises"][0] == {
             "name": "Bench Press",
+            "notes": "",
             "exercise_template_id": "t1",
             "sets": [
                 {
@@ -308,6 +301,7 @@ class TestFetchRoutines:
         assert mobility["exercises"] == [
             {
                 "name": "Hip Openers",
+                "notes": "",
                 "exercise_template_id": "t5",
                 "sets": [],
             }

@@ -1,4 +1,5 @@
 """Hevy API Client."""
+
 from __future__ import annotations
 
 import asyncio
@@ -23,7 +24,9 @@ class HevyAuthError(HevyApiError):
 class HevyApiClient:
     """Hevy API Client."""
 
-    def __init__(self, api_key: str, session: aiohttp.ClientSession | None = None) -> None:
+    def __init__(
+        self, api_key: str, session: aiohttp.ClientSession | None = None
+    ) -> None:
         """Initialize the API client.
 
         Args:
@@ -82,17 +85,14 @@ class HevyApiClient:
                     if response.status == 403:
                         raise HevyAuthError("Access forbidden")
                     if response.status >= 400:
-                        text = await response.text()
-                        raise HevyApiError(
-                            f"API request failed with status {response.status}: {text}"
-                        )
+                        raise HevyApiError(f"Hevy returned HTTP {response.status}")
 
                     return await response.json()
 
         except asyncio.TimeoutError as err:
             raise HevyApiError("Request timeout") from err
         except aiohttp.ClientError as err:
-            raise HevyApiError(f"Request failed: {err}") from err
+            raise HevyApiError("Connection to Hevy failed") from err
 
     async def validate_api_key(self) -> bool:
         """Validate the API key by making a test request.
@@ -109,8 +109,8 @@ class HevyApiClient:
             return True
         except HevyAuthError:
             raise
-        except HevyApiError as err:
-            _LOGGER.error("Failed to validate API key: %s", err)
+        except HevyApiError:
+            _LOGGER.error("Hevy authentication check failed")
             raise
 
     async def get_workout_count(self) -> int:
@@ -122,9 +122,7 @@ class HevyApiClient:
         data = await self._request("GET", "/workouts/count")
         return data.get("workout_count", 0)
 
-    async def get_workouts(
-        self, page: int = 1, page_size: int = 10
-    ) -> dict[str, Any]:
+    async def get_workouts(self, page: int = 1, page_size: int = 10) -> dict[str, Any]:
         """Get paginated workout list.
 
         Args:
@@ -170,13 +168,15 @@ class HevyApiClient:
         params = {"page": page, "pageSize": page_size}
         return await self._request("GET", "/exercise_templates", params=params)
 
-    async def get_routines(self) -> dict[str, Any]:
+    async def get_routines(self, page: int = 1, page_size: int = 10) -> dict[str, Any]:
         """Get saved routines.
 
         Returns:
             Dict with routine data
         """
-        return await self._request("GET", "/routines")
+        return await self._request(
+            "GET", "/routines", params={"page": page, "pageSize": page_size}
+        )
 
     async def close(self) -> None:
         """Close the session if owned by this client."""

@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      run: mise run fmt
+    lint:
+      run: mise run lint
+pre-push:
+  commands:
+    check:
+      run: mise run check
