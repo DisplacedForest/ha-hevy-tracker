@@ -1,6 +1,15 @@
 const escapeHTML = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const setTypes = ["normal", "warmup", "failure", "dropset"];
+const boardOptions = {
+  show_remove_exercise: [true, "Show exercise Remove button"],
+  show_set_type: [true, "Show set type"],
+  show_rpe: [true, "Show RPE"],
+  show_private_workout: [true, "Show Private workout control"],
+  default_private_workout: [false, "Make new workouts private by default"],
+  collapse_completed_sets: [false, "Collapse completed sets"],
+  show_account_stats: [false, "Show selected account stats"],
+};
 const styles = `
   :host { display: block; color: var(--primary-text-color, #202830); font-family: var(--paper-font-body1_-_font-family, system-ui, sans-serif); }
   * { box-sizing: border-box; }
@@ -37,15 +46,23 @@ const styles = `
   .exercise-head { margin-bottom: 14px; }
   .exercise-head button, .remove-set { font-size: 12px; min-height: 44px; padding: 8px 10px; }
   .sets { display: grid; gap: 8px; }
-  .set { display: grid; grid-template-columns: 44px repeat(3, minmax(0, 1fr)) 44px; gap: 8px; align-items: end; border-radius: 10px; padding: 8px; background: var(--secondary-background-color, #f3f6f8); }
+  .set { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 8px; align-items: center; border-radius: 10px; padding: 8px; background: var(--secondary-background-color, #f3f6f8); }
+  .set-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .set.collapsed { grid-template-columns: 44px minmax(0, 1fr); }
+  .set-summary { text-align: left; border: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
+  .set-summary .hint { margin: 0; }
+  .collapse-set { grid-column: 1 / -1; }
+  .account-name { margin-top: 8px; overflow-wrap: anywhere; }
+  .account-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 24px 20px; padding: 14px; border: 1px solid var(--divider-color, #dde3e7); border-radius: 10px; }
+  .account-stats dt { font-size: 12px; color: var(--secondary-text-color, #64717b); }
+  .account-stats dd { margin: 6px 0 0; font-size: 20px; font-weight: 600; }
+  .settings { border: 0; border-top: 1px solid var(--divider-color, #dde3e7); padding: 16px 0 0; margin: 0; min-width: 0; }
+  .settings legend { font-size: 16px; font-weight: 600; padding: 0 8px 0 0; }
   .set.done { box-shadow: inset 3px 0 0 var(--primary-color, #167b74); }
   .set label { font-size: 11px; gap: 5px; }
   .set input:not([type=checkbox]), .set select { min-width: 0; padding: 8px; background: var(--ha-card-background, var(--card-background-color, #fff)); }
   .set .completion { align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 4px; }
-  .set .set-type { grid-column: 2 / 4; }
-  .set .optional { grid-column: 4 / 5; }
-  .set .remove-set { grid-column: 5; grid-row: 1 / 3; align-self: center; padding: 8px; }
-  .set .completion { grid-row: 1 / 3; }
+  .set .remove-set { padding: 8px; }
   .exercise-actions { margin-top: 10px; }
   details { margin-top: 12px; }
   summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: 13px; color: var(--secondary-text-color, #64717b); }
@@ -64,11 +81,10 @@ const styles = `
     header, main, footer { padding-left: 16px; padding-right: 16px; }
     .notice { margin-left: 16px; margin-right: 16px; }
     h1 { font-size: 21px; }
-    .set { grid-template-columns: 36px repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 6px; }
-    .set .remove-set { grid-column: 4; grid-row: 1; align-self: end; min-height: 46px; }
-    .set .optional { grid-column: 4; }
-    .set .set-type { grid-column: 2 / 4; }
-    .set .completion { grid-row: 1 / 3; }
+    .set { grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 6px; padding: 8px 6px; }
+    .set.collapsed { grid-template-columns: 32px minmax(0, 1fr); }
+    .set .remove-set { min-height: 46px; }
+    .account-stats { margin-left: 16px; margin-right: 16px; }
     .row.actions > button { flex: 1; }
   }
   @media (prefers-reduced-motion: reduce) { .progress > span { transition: none; } }
@@ -87,6 +103,7 @@ class HevyWorkoutCard extends HTMLElement {
     this._error = "";
     this._search = "";
     this._invalid = new Map();
+    this._expandedSets = new Set();
     this._requestVersion = 0;
     this.shadowRoot.addEventListener("click", (event) => this._click(event));
     this.shadowRoot.addEventListener("input", (event) => this._input(event));
@@ -99,6 +116,9 @@ class HevyWorkoutCard extends HTMLElement {
 
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Card configuration is required.");
+    for (const key of Object.keys(boardOptions)) {
+      if (config[key] !== undefined && typeof config[key] !== "boolean") throw new Error(`${boardOptions[key][1]} must be true or false.`);
+    }
     const previous = this._config.config_entry_id;
     this._config = { ...config };
     if (previous !== config.config_entry_id || !this._board) {
@@ -139,6 +159,11 @@ class HevyWorkoutCard extends HTMLElement {
 
   get _dirty() { return this._editVersion !== this._savedVersion; }
   get _online() { return (this._hass?.connection?.connected ?? this._hass?.connected) !== false; }
+  _option(key) { return this._config[key] ?? boardOptions[key][0]; }
+
+  _accountTitle() {
+    return this._board?.accounts?.find((account) => account.config_entry_id === this._entry)?.title || "Hevy account";
+  }
 
   _reset(entry) {
     this._epoch += 1;
@@ -153,6 +178,7 @@ class HevyWorkoutCard extends HTMLElement {
     this._error = "";
     this._confirm = "";
     this._invalid.clear();
+    this._expandedSets.clear();
     this._needsLoad = true;
     clearTimeout(this._saveTimer);
   }
@@ -187,6 +213,7 @@ class HevyWorkoutCard extends HTMLElement {
       this._entry = board.config_entry_id || this._entry;
       if (!this._dirty && !this._saving) {
         this._draft = board.session ? copy(board.session) : null;
+        if (oldId !== this._draft?.id) this._expandedSets.clear();
         this._conflict = false;
       } else if (board.session?.id !== oldId || board.session?.revision !== oldRevision) {
         this._conflict = true;
@@ -194,6 +221,7 @@ class HevyWorkoutCard extends HTMLElement {
         this._error = "This workout changed on another screen. Your unsaved edits are still here. Load the saved session to continue.";
       }
       if (!quiet || oldRevision !== this._draft?.revision || oldId !== this._draft?.id || oldStatus !== this._draft?.status || this._conflict) this._render();
+      else this._renderStats();
     } catch (error) {
       if (epoch !== this._epoch) return;
       this._error = this._message(error, "Could not load your workout. Check the Home Assistant connection.");
@@ -336,15 +364,22 @@ class HevyWorkoutCard extends HTMLElement {
         if (target.value) set.rpe = Number(target.value);
         else delete set.rpe;
       } else set[field] = field === "completed" ? target.checked : target.value;
-      if (field === "completed") target.closest(".set").classList.toggle("done", target.checked);
+      if (field === "completed") {
+        const key = `${target.dataset.exercise}:${target.dataset.set}`;
+        this._expandedSets.delete(key);
+        this._renderSet(Number(target.dataset.exercise), Number(target.dataset.set));
+        this.shadowRoot.querySelector(`[data-field="completed"][data-exercise="${target.dataset.exercise}"][data-set="${target.dataset.set}"]`)?.focus({ preventScroll: true });
+      }
     } else return;
     this._changed();
   }
 
   async _switchAccount(entry) {
     if (this._actionBusy) return;
+    this._actionBusy = true;
+    this._render();
     await this._save();
-    if (this._dirty || this._saveError) { this._render(); return; }
+    if (this._dirty || this._saveError) { this._actionBusy = false; this._render(); return; }
     this._reset(entry);
     this._render();
     await this._load();
@@ -377,7 +412,7 @@ class HevyWorkoutCard extends HTMLElement {
     }
     else if (action === "start") {
       const routine = this.shadowRoot.querySelector("[data-action=routine]").value;
-      void this._action("start_workout", routine ? { routine_id: routine } : {});
+      void this._action("start_workout", { ...(routine ? { routine_id: routine } : {}), is_private: this._option("default_private_workout") });
     }
     else if (action === "add-exercise") {
       const id = this.shadowRoot.querySelector("[data-action=exercise]").value;
@@ -397,16 +432,28 @@ class HevyWorkoutCard extends HTMLElement {
     else if (action === "remove-set") {
       if (this._draft.exercises[exerciseIndex].sets.length <= 1) return;
       this._draft.exercises[exerciseIndex].sets.splice(Number(button.dataset.set), 1);
+      this._expandedSets.clear();
       this._changed();
       this._render();
     }
     else if (action === "remove-exercise") {
+      if (!this._option("show_remove_exercise")) return;
       this._showConfirmation(`remove:${exerciseIndex}`);
     }
     else if (action === "remove-confirm") {
+      if (!this._option("show_remove_exercise")) return;
       this._draft.exercises.splice(exerciseIndex, 1);
+      this._expandedSets.clear();
       this._changed();
       this._render();
+    }
+    else if (action === "expand-set" || action === "collapse-set") {
+      const setIndex = Number(button.dataset.set);
+      const key = `${exerciseIndex}:${setIndex}`;
+      if (action === "expand-set") this._expandedSets.add(key);
+      else this._expandedSets.delete(key);
+      this._renderSet(exerciseIndex, setIndex);
+      this.shadowRoot.querySelector(`[data-field="completed"][data-exercise="${exerciseIndex}"][data-set="${setIndex}"]`)?.focus({ preventScroll: true });
     }
     else if (["finish", "cancel", "retry", "discard"].includes(action)) this._showConfirmation(action);
     else if (action === "dismiss") { this._confirm = ""; this._render(); }
@@ -474,7 +521,7 @@ class HevyWorkoutCard extends HTMLElement {
     return `<label>${label}<input type="number" inputmode="${integer ? "numeric" : "decimal"}" min="0" max="1000000" ${this._invalid.has(key) ? 'aria-invalid="true"' : ""} step="${integer ? "1" : field === "rpe" ? "0.5" : "any"}" value="${escapeHTML(value)}" aria-label="${escapeHTML(label)} for set ${index + 1} of ${escapeHTML(this._draft.exercises[exercise].name)}" data-field="${field}" data-exercise="${exercise}" data-set="${index}" ${disabled}></label>`;
   }
 
-  _exercise(exercise, index, disabled) {
+  _measurementFields(exercise) {
     const metadata = this._board.exercises.find((item) => item.id === exercise.exercise_template_id);
     const kind = metadata?.type || "weight_reps";
     const duration = kind.includes("duration") || exercise.sets.some((set) => set.duration_seconds != null);
@@ -486,7 +533,48 @@ class HevyWorkoutCard extends HTMLElement {
     if (reps) fields.push(["reps", "Reps"]);
     if (duration) fields.push(["duration_seconds", "Time (sec)"]);
     if (distance) fields.push(["distance", `Distance (${escapeHTML(this._draft.distance_unit)})`]);
-    return `<section class="exercise"><div class="row spread exercise-head"><h3>${escapeHTML(exercise.name)}</h3><button class="danger" data-action="remove-exercise" data-exercise="${index}" aria-label="Remove ${escapeHTML(exercise.name)}" ${disabled}>Remove</button></div><div class="sets">${exercise.sets.map((set, setIndex) => `<div class="set ${set.completed ? "done" : ""}"><label class="completion"><span>Set ${setIndex + 1}</span><input type="checkbox" data-field="completed" data-exercise="${index}" data-set="${setIndex}" aria-label="Complete set ${setIndex + 1} of ${escapeHTML(exercise.name)}" ${set.completed ? "checked" : ""} ${disabled}></label>${fields.map(([field, label]) => this._numeric(field, label, set, index, setIndex, disabled)).join("")}<label class="set-type">Set type<select data-field="type" data-exercise="${index}" data-set="${setIndex}" aria-label="Type for set ${setIndex + 1} of ${escapeHTML(exercise.name)}" ${disabled}>${setTypes.map((type) => `<option value="${type}" ${type === set.type ? "selected" : ""}>${type[0].toUpperCase() + type.slice(1)}</option>`).join("")}</select></label><div class="optional">${this._numeric("rpe", "RPE", set, index, setIndex, disabled)}</div><button class="remove-set danger" data-action="remove-set" data-exercise="${index}" data-set="${setIndex}" aria-label="Remove set ${setIndex + 1} of ${escapeHTML(exercise.name)}" ${disabled || (exercise.sets.length <= 1 ? "disabled" : "")}>×</button></div>`).join("")}</div><div class="exercise-actions"><button data-action="add-set" data-exercise="${index}" ${disabled}>+ Add set</button></div><details><summary>Exercise notes</summary><label>Notes<textarea data-field="notes" data-exercise="${index}" aria-label="Notes for ${escapeHTML(exercise.name)}" maxlength="2000" ${disabled}>${escapeHTML(exercise.notes || "")}</textarea></label></details></section>`;
+    return fields;
+  }
+
+  _set(exercise, index, setIndex, disabled) {
+    const set = exercise.sets[setIndex];
+    const key = `${index}:${setIndex}`;
+    const invalid = [...this._invalid.keys()].some((field) => field.endsWith(`:${key}`));
+    const collapsible = this._option("collapse_completed_sets") && set.completed && !invalid;
+    const collapsed = collapsible && !this._expandedSets.has(key);
+    const completion = `<label class="completion"><span>Set ${setIndex + 1}</span><input type="checkbox" data-field="completed" data-exercise="${index}" data-set="${setIndex}" aria-label="Complete set ${setIndex + 1} of ${escapeHTML(exercise.name)}" ${set.completed ? "checked" : ""} ${disabled}></label>`;
+    if (collapsed) {
+      const measurements = [["weight", this._draft.weight_unit], ["reps", "reps"], ["duration_seconds", "sec"], ["distance", this._draft.distance_unit]].filter(([field]) => set[field] != null).map(([field, unit]) => `${set[field]} ${unit}`).join(" · ");
+      return `<div class="set done collapsed" data-set-row="${key}">${completion}<button class="set-summary" data-action="expand-set" data-exercise="${index}" data-set="${setIndex}" aria-expanded="false" aria-label="Show details for set ${setIndex + 1} of ${escapeHTML(exercise.name)}" ${disabled}><span>${escapeHTML(measurements)}</span><span class="hint">Show details</span></button></div>`;
+    }
+    const type = this._option("show_set_type") ? `<label>Set type<select data-field="type" data-exercise="${index}" data-set="${setIndex}" aria-label="Type for set ${setIndex + 1} of ${escapeHTML(exercise.name)}" ${disabled}>${setTypes.map((type) => `<option value="${type}" ${type === set.type ? "selected" : ""}>${type[0].toUpperCase() + type.slice(1)}</option>`).join("")}</select></label>` : "";
+    const rpe = this._option("show_rpe") ? this._numeric("rpe", "RPE", set, index, setIndex, disabled) : "";
+    const collapse = collapsible ? `<button class="collapse-set" data-action="collapse-set" data-exercise="${index}" data-set="${setIndex}" aria-expanded="true" ${disabled}>Hide details</button>` : "";
+    return `<div class="set ${set.completed ? "done" : ""}" data-set-row="${key}">${completion}<div class="set-fields">${this._measurementFields(exercise).map(([field, label]) => this._numeric(field, label, set, index, setIndex, disabled)).join("")}${type}${rpe}${collapse}</div><button class="remove-set danger" data-action="remove-set" data-exercise="${index}" data-set="${setIndex}" aria-label="Remove set ${setIndex + 1} of ${escapeHTML(exercise.name)}" ${disabled || (exercise.sets.length <= 1 ? "disabled" : "")}>×</button></div>`;
+  }
+
+  _renderSet(index, setIndex) {
+    const row = this.shadowRoot.querySelector(`[data-set-row="${index}:${setIndex}"]`);
+    const exercise = this._draft?.exercises[index];
+    if (row && exercise?.sets[setIndex]) {
+      const disabled = this._actionBusy || !this._online || this._draft.status !== "active" ? "disabled" : "";
+      row.outerHTML = this._set(exercise, index, setIndex, disabled);
+    }
+  }
+
+  _exercise(exercise, index, disabled) {
+    const remove = this._option("show_remove_exercise") ? `<button class="danger" data-action="remove-exercise" data-exercise="${index}" aria-label="Remove ${escapeHTML(exercise.name)}" ${disabled}>Remove</button>` : "";
+    return `<section class="exercise"><div class="row spread exercise-head"><h3>${escapeHTML(exercise.name)}</h3>${remove}</div><div class="sets">${exercise.sets.map((_, setIndex) => this._set(exercise, index, setIndex, disabled)).join("")}</div><div class="exercise-actions"><button data-action="add-set" data-exercise="${index}" ${disabled}>+ Add set</button></div><details><summary>Exercise notes</summary><label>Notes<textarea data-field="notes" data-exercise="${index}" aria-label="Notes for ${escapeHTML(exercise.name)}" maxlength="2000" ${disabled}>${escapeHTML(exercise.notes || "")}</textarea></label></details></section>`;
+  }
+
+  _renderStats() {
+    const region = this.shadowRoot.querySelector("[data-account-stats]");
+    if (!region) return;
+    const stats = this._board?.stats || {};
+    region.innerHTML = [["workout_count", "Total workouts"], ["weekly_workout_count", "Last 7 days"], ["current_streak", "Streak (days)"]].map(([key, label]) => {
+      const available = typeof stats[key] === "number" && Number.isFinite(stats[key]);
+      return `<div><dt>${label}</dt><dd class="${available ? "" : "muted"}">${available ? escapeHTML(stats[key]) : "Unavailable"}</dd></div>`;
+    }).join("");
   }
 
   _confirmation() {
@@ -498,7 +586,7 @@ class HevyWorkoutCard extends HTMLElement {
     let extra = "";
     if (this._confirm === "finish") {
       title = "Finish this workout?";
-      text = `${this._count().completed} completed sets will be sent to Hevy. Unchecked sets will be left out.`;
+      text = `${this._count().completed} completed ${this._count().completed === 1 ? "set" : "sets"} will be sent to ${this._accountTitle()} as a ${this._draft.is_private ? "private" : "public"} workout. Unchecked sets will be left out.`;
       action = "finish-confirm";
       label = "Finish and send to Hevy";
     } else if (this._confirm === "cancel") {
@@ -551,12 +639,13 @@ class HevyWorkoutCard extends HTMLElement {
     } else if (draft.status === "submitting") {
       content = `<div class="intro" role="status"><h2>Sending your workout...</h2><p>Keep this session open. Its saved status will update automatically.</p></div>`;
     } else {
-      content = `<div class="stack"><label>Workout title<input data-field="title" value="${escapeHTML(this._invalid.has("title::") ? this._invalid.get("title::") : draft.title)}" required maxlength="200" ${this._invalid.has("title::") ? 'aria-invalid="true"' : ""} ${disabled}></label><label class="check"><input type="checkbox" data-field="is_private" ${draft.is_private ? "checked" : ""} ${disabled}>Private workout</label></div>${draft.exercises.length ? draft.exercises.map((exercise, index) => this._exercise(exercise, index, disabled)).join("") : '<p class="empty">Add your first exercise below, then check off each set as you finish it.</p>'}<section class="picker stack"><h3>Add an exercise</h3><label>Search exercises<input data-action="search" type="search" value="${escapeHTML(this._search)}" placeholder="Name or muscle group" ${disabled}></label><label>Exercise<select data-action="exercise" ${disabled}>${this._exerciseOptions()}</select></label><button data-action="add-exercise" ${disabled}>+ Add exercise</button></section>`;
+      content = `<div class="stack"><label>Workout title<input data-field="title" value="${escapeHTML(this._invalid.has("title::") ? this._invalid.get("title::") : draft.title)}" required maxlength="200" ${this._invalid.has("title::") ? 'aria-invalid="true"' : ""} ${disabled}></label>${this._option("show_private_workout") ? `<label class="check"><input type="checkbox" data-field="is_private" ${draft.is_private ? "checked" : ""} ${disabled}>Private workout</label>` : ""}</div>${draft.exercises.length ? draft.exercises.map((exercise, index) => this._exercise(exercise, index, disabled)).join("") : '<p class="empty">Add your first exercise below, then check off each set as you finish it.</p>'}<section class="picker stack"><h3>Add an exercise</h3><label>Search exercises<input data-action="search" type="search" value="${escapeHTML(this._search)}" placeholder="Name or muscle group" ${disabled}></label><label>Exercise<select data-action="exercise" ${disabled}>${this._exerciseOptions()}</select></label><button data-action="add-exercise" ${disabled}>+ Add exercise</button></section>`;
       footer = `<div class="row spread"><span class="muted" data-count></span><span class="saved" data-save-status role="status" aria-live="polite"></span></div><div class="progress" aria-hidden="true"><span></span></div><div class="row actions"><button class="danger" data-action="cancel" ${busy}>Discard session</button><button class="primary" data-action="finish" ${busy}>Finish workout</button></div>`;
     }
-    this.shadowRoot.innerHTML = `<style>${styles}</style><ha-card><header><div><p class="eyebrow">Hevy · Workout board</p><h1>${escapeHTML(this._config.title || "Workout")}</h1></div>${draft ? `<span class="badge">${escapeHTML(({ active: "In progress", submitting: "Sending", uncertain: "Check Hevy", finished: "Finished" })[draft.status] || draft.status)}</span>` : ""}</header><div data-errors></div>${accounts.length > 1 ? `<div class="notice"><label>Hevy account<select data-action="account" ${busy}><option value="">Choose an account</option>${accounts.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === this._entry ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select></label></div>` : ""}<main>${content}</main>${footer || this._confirm ? `<footer>${footer}${this._confirmation()}</footer>` : ""}</ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${styles}</style><ha-card><header><div><p class="eyebrow">Hevy · Workout board</p><h1>${escapeHTML(this._config.title || "Workout")}</h1>${this._entry && this._board ? `<p class="muted account-name">${escapeHTML(this._accountTitle())}</p>` : ""}</div>${draft ? `<span class="badge">${escapeHTML(({ active: "In progress", submitting: "Sending", uncertain: "Check Hevy", finished: "Finished" })[draft.status] || draft.status)}</span>` : ""}</header><div data-errors></div>${accounts.length > 1 ? `<div class="notice"><label>Who is working out?<select data-action="account" ${busy}><option value="">Choose an account</option>${accounts.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === this._entry ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select></label></div>` : ""}${this._option("show_account_stats") && this._entry ? `<dl class="account-stats" data-account-stats aria-label="Stats for ${escapeHTML(this._accountTitle())}"></dl>` : ""}<main>${content}</main>${footer || this._confirm ? `<footer>${footer}${this._confirmation()}</footer>` : ""}</ha-card>`;
     this._renderError();
     this._status();
+    this._renderStats();
   }
 }
 
@@ -568,9 +657,10 @@ class HevyWorkoutCardEditor extends HTMLElement {
     this.shadowRoot.addEventListener("change", (event) => {
       const key = event.target.dataset.config;
       if (!key) return;
-      const value = event.target.value.trim();
+      const value = event.target.type === "checkbox" ? event.target.checked : event.target.value.trim();
       this._config = { ...this._config };
-      if (key.endsWith("_ids")) {
+      if (key in boardOptions) this._config[key] = value;
+      else if (key.endsWith("_ids")) {
         const ids = value.split(",").map((id) => id.trim()).filter(Boolean);
         if (ids.length) this._config[key] = ids;
         else delete this._config[key];
@@ -595,7 +685,7 @@ class HevyWorkoutCardEditor extends HTMLElement {
 
   _render() {
     const config = this._config;
-    this.shadowRoot.innerHTML = `<style>${styles}</style><div class="stack"><label>Title<input data-config="title" value="${escapeHTML(config.title || "Workout")}"></label><label>Hevy account${this._accountList ? `<select data-config="config_entry_id"><option value="">Choose on the card</option>${this._accountList.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === config.config_entry_id ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select>` : `<input data-config="config_entry_id" value="${escapeHTML(config.config_entry_id || "")}" placeholder="Optional config entry ID">`}</label><label>Favorite routine IDs<input data-config="routine_ids" value="${escapeHTML((config.routine_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><label>Favorite exercise IDs<input data-config="exercise_ids" value="${escapeHTML((config.exercise_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><p class="hint">Favorites appear first in the pickers. Other routines and exercises remain available. Sessions are saved in Home Assistant for the selected account.</p></div>`;
+    this.shadowRoot.innerHTML = `<style>${styles}</style><div class="stack"><label>Title<input data-config="title" value="${escapeHTML(config.title || "Workout")}"></label><label>Hevy account${this._accountList ? `<select data-config="config_entry_id"><option value="">Choose on the card</option>${this._accountList.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === config.config_entry_id ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select>` : `<input data-config="config_entry_id" value="${escapeHTML(config.config_entry_id || "")}" placeholder="Optional config entry ID">`}</label><label>Favorite routine IDs<input data-config="routine_ids" value="${escapeHTML((config.routine_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><label>Favorite exercise IDs<input data-config="exercise_ids" value="${escapeHTML((config.exercise_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><p class="hint">Favorites appear first in the pickers. Other routines and exercises remain available. Sessions are saved in Home Assistant for the selected account.</p><fieldset class="settings"><legend>Board display</legend>${Object.entries(boardOptions).map(([key, [fallback, label]]) => `<label class="check"><input type="checkbox" data-config="${key}" ${(config[key] ?? fallback) ? "checked" : ""}>${label}</label>`).join("")}<p class="hint">The privacy default applies when starting a new workout. Saved sessions keep their privacy setting. Hidden set type and RPE values are preserved.</p></fieldset></div>`;
   }
 }
 

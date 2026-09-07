@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-07
+
+A more customizable workout board with clearer account selection.
+
+- Choose whether to show exercise removal, set type, RPE, and the Private workout control through the visual editor or card configuration.
+- Set the privacy default for new workouts. Saved sessions keep their privacy when opened on another card.
+- Optionally collapse completed sets into summaries that can be expanded for editing or unchecked to undo completion.
+- Show Hevy account names in the picker and workout header, with integration names as a fallback and custom label.
+- Optionally show total workouts, last-7-day activity, and streak for the selected account.
+- Review the destination account and workout privacy in the finish confirmation.
+
+Existing cards keep their display defaults. After updating, change the dashboard resource URL to `/hevy/hevy-workout-card.js?version=1.5.0` and reload the browser. See the [board settings and shared-tablet guide](https://github.com/DisplacedForest/ha-hevy-tracker#customize-your-workout-board).
+
 ## [1.4.0] - 2026-09-06
 
 Log workouts from a Home Assistant dashboard. Pick a routine, adjust your sets, and check them off as you go. Your draft stays saved through refreshes and restarts.

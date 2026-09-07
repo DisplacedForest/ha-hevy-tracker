@@ -471,3 +471,129 @@ async def test_repeated_cancel_keeps_writer_locked_until_durable(
     assert reopened.snapshot() == receipt
     assert await reopened.finish(current["id"], current["revision"]) == receipt
     session_manager.coordinator.client.create_workout.assert_awaited_once()
+
+
+@pytest.mark.parametrize("is_private", [True, False])
+async def test_start_privacy_is_saved_before_first_edit(
+    hass, session_manager, is_private
+):
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_API_KEY: "privacy-fixture"})
+    entry.add_to_hass(hass)
+    session_manager.coordinator.workout_session = session_manager
+    hass.data[DOMAIN] = {entry.entry_id: session_manager.coordinator}
+    register_session_services(hass)
+    result = await hass.services.async_call(
+        DOMAIN,
+        "start_workout",
+        {
+            "config_entry_id": entry.entry_id,
+            "routine_id": "r1",
+            "is_private": is_private,
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert result["session"]["is_private"] is is_private
+    reopened = WorkoutSession(hass, "entry-one", session_manager.coordinator)
+    await reopened.load()
+    assert reopened.snapshot()["is_private"] is is_private
+    draft = reopened.snapshot()
+    draft["exercises"][0]["sets"][0]["completed"] = True
+    saved = await reopened.update(draft["id"], draft["revision"], draft)
+    await reopened.finish(saved["id"], saved["revision"])
+    payload = session_manager.coordinator.client.create_workout.call_args.args[0]
+    assert payload["workout"]["is_private"] is is_private
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        None,
+        [],
+        {},
+        {"data": None},
+        {"data": []},
+        {"data": {"name": 2}},
+        {"data": {"name": " "}},
+    ],
+)
+async def test_bad_account_info_keeps_fallback(imperial_coordinator, response):
+    imperial_coordinator.client.get_user_info.return_value = response
+    await imperial_coordinator.fetch_account_name()
+    assert imperial_coordinator.account_name is None
+
+
+async def test_unavailable_account_info_keeps_cached_name(imperial_coordinator):
+    imperial_coordinator.account_name = "Sam"
+    imperial_coordinator.client.get_user_info.side_effect = HevyApiError("Unavailable")
+    await imperial_coordinator.fetch_account_name()
+    assert imperial_coordinator.account_name == "Sam"
+
+
+async def test_account_name_stats_and_sessions_stay_with_selected_entry(
+    hass, imperial_coordinator, metric_coordinator
+):
+    from custom_components.hevy.const import DEFAULT_NAME
+
+    coordinators = [imperial_coordinator, metric_coordinator]
+    entries = []
+    for index, coordinator in enumerate(coordinators):
+        entry = MockConfigEntry(
+            domain=DOMAIN, data={CONF_API_KEY: f"account-{index}"}, title=DEFAULT_NAME
+        )
+        entry.add_to_hass(hass)
+        entries.append(entry)
+        coordinator.client.get_user_info.return_value = {
+            "data": {"name": f" Person {index} "}
+        }
+        await coordinator.fetch_account_name()
+        coordinator.async_set_updated_data(
+            {
+                "workout_count": index + 10,
+                "weekly_workout_count": index + 1,
+                "current_streak": index,
+            }
+        )
+        coordinator.workout_session = WorkoutSession(hass, entry.entry_id, coordinator)
+        await coordinator.workout_session.start(None, f"Workout {index}")
+    hass.data[DOMAIN] = dict(
+        zip([entry.entry_id for entry in entries], coordinators, strict=True)
+    )
+    register_session_services(hass)
+    picker = await hass.services.async_call(
+        DOMAIN, "get_workout_board", {}, blocking=True, return_response=True
+    )
+    assert picker["config_entry_id"] is None
+    assert [account["title"] for account in picker["accounts"]] == [
+        "Person 0",
+        "Person 1",
+    ]
+    for index, entry in enumerate(entries):
+        board = await hass.services.async_call(
+            DOMAIN,
+            "get_workout_board",
+            {"config_entry_id": entry.entry_id},
+            blocking=True,
+            return_response=True,
+        )
+        assert board["session"]["title"] == f"Workout {index}"
+        assert board["stats"] == {
+            "workout_count": index + 10,
+            "weekly_workout_count": index + 1,
+            "current_streak": index,
+        }
+    hass.config_entries.async_update_entry(entries[0], title="My label")
+    imperial_coordinator.last_update_success = False
+    board = await hass.services.async_call(
+        DOMAIN,
+        "get_workout_board",
+        {"config_entry_id": entries[0].entry_id},
+        blocking=True,
+        return_response=True,
+    )
+    assert board["accounts"][0]["title"] == "My label"
+    assert board["stats"] == {
+        "workout_count": None,
+        "weekly_workout_count": None,
+        "current_streak": None,
+    }

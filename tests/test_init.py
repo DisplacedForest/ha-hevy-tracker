@@ -30,6 +30,7 @@ def _sample_workout() -> dict:
 def _patch_api():
     return patch.multiple(
         HevyApiClient,
+        get_user_info=AsyncMock(return_value={"data": {"name": "Test account"}}),
         get_workout_count=AsyncMock(return_value=42),
         get_workouts=AsyncMock(
             return_value={"workouts": [_sample_workout()], "page_count": 1}
