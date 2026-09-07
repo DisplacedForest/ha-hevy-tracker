@@ -27,15 +27,19 @@
       { exercise_template_id: "bench", name: "Bench Press (Barbell)", sets: [1, 2, 3].map(() => ({ type: "normal", weight: 60, reps: 8, completed: false })) },
       { exercise_template_id: "row", name: "Bent Over Row (Dumbbell)", sets: [1, 2, 3].map(() => ({ type: "normal", weight: 22, reps: 10, completed: false })) },
     ] }];
-    let session = JSON.parse(localStorage.getItem("hevy-card-preview") || "null");
+    const accounts = [{ config_entry_id: "preview", title: "Alex" }, { config_entry_id: "sam", title: "Sam" }];
+    const sessions = JSON.parse(localStorage.getItem("hevy-card-preview-accounts") || "{}");
+    const customized = new URLSearchParams(location.search).has("customized");
     const card = document.querySelector("hevy-workout-card");
-    card.setConfig({ type: "custom:hevy-workout-card", title: "Today's training", config_entry_id: "preview" });
+    card.setConfig({ type: "custom:hevy-workout-card", title: "Today's training", ...(customized ? { show_remove_exercise: false, show_set_type: false, show_rpe: false, show_private_workout: false, default_private_workout: true, collapse_completed_sets: true, show_account_stats: true } : {}) });
     card.hass = {
       connected: true,
       callWS: async ({ service, service_data: data }) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
-        if (service === "get_workout_board") return { response: { accounts: [{ config_entry_id: "preview", title: "Preview" }], config_entry_id: "preview", weight_unit: "kg", distance_unit: "km", exercises, routines, session: structuredClone(session), next_routine_id: "upper" } };
-        if (service === "start_workout") session = { id: crypto.randomUUID(), revision: 1, status: "active", title: data.routine_id ? "Upper body A" : "Workout", start_time: new Date().toISOString(), weight_unit: "kg", distance_unit: "km", is_private: true, exercises: data.routine_id ? structuredClone(routines[0].exercises) : [] };
+        const entry = data.config_entry_id;
+        let session = sessions[entry] || null;
+        if (service === "get_workout_board") return { response: entry ? { accounts, config_entry_id: entry, weight_unit: "kg", distance_unit: "km", exercises, routines, session: structuredClone(session), next_routine_id: "upper", stats: { workout_count: entry === "preview" ? 42 : 18, weekly_workout_count: entry === "preview" ? 3 : 1, current_streak: entry === "preview" ? 2 : 0 } } : { accounts, config_entry_id: null } };
+        if (service === "start_workout") session = { id: crypto.randomUUID(), revision: 1, status: "active", title: data.routine_id ? "Upper body A" : "Workout", start_time: new Date().toISOString(), weight_unit: "kg", distance_unit: "km", is_private: data.is_private ?? false, exercises: data.routine_id ? structuredClone(routines[0].exercises) : [] };
         if (service === "update_workout") {
           if (data.revision !== session.revision) throw new Error("This workout changed on another screen.");
           session = { ...session, ...data, revision: session.revision + 1 };
@@ -43,7 +47,8 @@
         if (service === "finish_workout") session = { ...session, revision: session.revision + 1, status: "finished", workout_id: "preview-workout" };
         if (service === "cancel_workout" || (service === "resolve_workout" && data.resolution === "discard")) session = null;
         if (service === "resolve_workout" && data.resolution === "retry") session = { ...session, revision: session.revision + 1, status: "active" };
-        localStorage.setItem("hevy-card-preview", JSON.stringify(session));
+        sessions[entry] = session;
+        localStorage.setItem("hevy-card-preview-accounts", JSON.stringify(sessions));
         return { response: { session: structuredClone(session) } };
       },
     };

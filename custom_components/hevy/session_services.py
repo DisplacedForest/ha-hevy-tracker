@@ -6,7 +6,7 @@ import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
 
-from .const import DOMAIN
+from .const import DEFAULT_NAME, DOMAIN
 from .workout_session import (
     SESSION_EXERCISES_SCHEMA,
     TITLE,
@@ -40,7 +40,14 @@ def register_session_services(hass: HomeAssistant) -> None:
 
     async def board(call: ServiceCall) -> dict[str, Any]:
         accounts = [
-            {"config_entry_id": entry.entry_id, "title": entry.title}
+            {
+                "config_entry_id": entry.entry_id,
+                "title": (
+                    entry.title
+                    if entry.title != DEFAULT_NAME
+                    else hass.data[DOMAIN][entry.entry_id].account_name or entry.title
+                ),
+            }
             for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.entry_id in hass.data.get(DOMAIN, {})
         ]
@@ -54,6 +61,7 @@ def register_session_services(hass: HomeAssistant) -> None:
         next_workout = (
             coordinator.data.get("routine_data", {}) if coordinator.data else {}
         )
+        data = coordinator.data or {}
         return {
             "accounts": accounts,
             "config_entry_id": entry_id,
@@ -81,13 +89,23 @@ def register_session_services(hass: HomeAssistant) -> None:
             ),
             "session": current.snapshot(),
             "next_routine_id": next_workout.get("routine_id"),
+            "stats": {
+                key: data.get(key) if coordinator.last_update_success else None
+                for key in (
+                    "workout_count",
+                    "weekly_workout_count",
+                    "current_streak",
+                )
+            },
         }
 
     async def mutate(call: ServiceCall) -> dict[str, Any]:
         current = manager(call.data["config_entry_id"])
         if call.service == "start_workout":
             session = await current.start(
-                call.data.get("routine_id"), call.data.get("title")
+                call.data.get("routine_id"),
+                call.data.get("title"),
+                call.data["is_private"],
             )
         elif call.service == "update_workout":
             session = await current.update(
@@ -112,6 +130,7 @@ def register_session_services(hass: HomeAssistant) -> None:
             **ENTRY,
             vol.Optional("routine_id"): TITLE,
             vol.Optional("title"): TITLE,
+            vol.Optional("is_private", default=False): bool,
         },
         "update_workout": {
             **CURRENT,

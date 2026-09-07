@@ -136,6 +136,12 @@ start_workout:
       name: Title
       selector:
         text: null
+    is_private:
+      name: Private workout
+      description: Sets the visibility for this new session. Saved sessions keep this value.
+      default: false
+      selector:
+        boolean: null
 update_workout:
   name: Update workout
   description: Saves the full workout draft. Stale revisions are rejected to protect

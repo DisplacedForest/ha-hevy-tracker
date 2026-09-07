@@ -78,10 +78,10 @@ The bundled live workout card and native calendar card work alongside your exist
 
 ### Live workout card
 
-The card is included with the integration and requires Home Assistant 2024.7 or later. After installing or updating to 1.4 and restarting Home Assistant:
+The card is included with the integration and requires Home Assistant 2024.7 or later. After installing or updating to 1.5 and restarting Home Assistant:
 
 1. Enable **Advanced mode** in your Home Assistant profile if Resources is hidden.
-2. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.4.0` with resource type **JavaScript Module**.
+2. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.5.0` with resource type **JavaScript Module**.
 3. Add a manual card to your dashboard:
 
 ```yaml
@@ -108,6 +108,47 @@ Home Assistant saves one active session per Hevy integration entry. Refreshing t
 The next-routine suggestion uses the integration's existing rotation data. Hevy's public workout creation API does not link new logs to a routine, so logging from the card does not automatically advance that rotation.
 
 The card requires a connection to Home Assistant to save changes and does not accept offline edits. If a network interruption leaves the result of a finish request uncertain, check Hevy for the workout before choosing to retry or clear the session. Retrying a workout that already reached Hevy can create a duplicate.
+
+### Customize your workout board
+
+Open the card's visual editor to choose which controls appear. Every setting below is optional. Existing cards keep their current defaults.
+
+| Setting | Default | What it does |
+|---------|---------|--------------|
+| `show_remove_exercise` | `true` | Shows the Remove button next to each exercise. Set removal stays available. |
+| `show_set_type` | `true` | Shows the set type dropdown. Hiding it preserves the routine or saved set type. |
+| `show_rpe` | `true` | Shows the RPE dropdown. Hiding it preserves any saved RPE. |
+| `show_private_workout` | `true` | Shows the Private workout checkbox. |
+| `default_private_workout` | `false` | Makes new sessions public or private. Applies once when starting a workout. |
+| `collapse_completed_sets` | `false` | Collapses checked sets into a measurement summary. Choose Show details to edit, or uncheck a set to undo completion. |
+| `show_account_stats` | `false` | Shows total workouts, the last 7 days' workout count, and streak for the selected account. |
+
+For a compact board with private workouts and account stats:
+
+```yaml
+type: custom:hevy-workout-card
+show_remove_exercise: false
+show_set_type: false
+show_rpe: false
+show_private_workout: false
+default_private_workout: true
+collapse_completed_sets: true
+show_account_stats: true
+```
+
+Display settings belong to each card. Saved sessions keep their privacy, set types, RPE, and completed sets when opened from another card with different display settings. Hiding a control does not erase its value. The finish confirmation always shows the account and actual workout privacy before sending.
+
+### Shared tablets and multiple accounts
+
+Add the integration once per person's Hevy account, using that person's API key. Each account needs Hevy API access, currently provided with Hevy Pro. Each entry has its own routines, stats, and saved workout. On a shared tablet, use **Who is working out?** to switch accounts. A separate Home Assistant login for every person is optional.
+
+The picker uses the Hevy display name when available. Rename the integration entry in Home Assistant to give it your own label, especially when two accounts share a name. If the profile lookup is unavailable, the entry name still works. Profile names load when the integration starts; reload it to fetch a changed Hevy name. API keys stay in the integration and never belong in card configuration.
+
+Set `config_entry_id` to choose the account a card opens on. With multiple entries, the picker remains available. Switching accounts saves pending edits first; invalid or unsaved edits must be resolved before switching. Account selection belongs to that card, so another screen can keep working with a different account.
+
+Enable `show_account_stats` for stats that follow the picker. These use the integration's existing polling data and refresh after a confirmed workout submission. Unavailable data is labeled instead of displayed as zero. Standalone stats cards in the examples below still need the entity IDs for the intended account, including any IDs inside their templates. They do not follow this card's account picker.
+
+Account selection is for choosing the workout destination. It does not restrict which Home Assistant users can access an account. The Private workout setting controls the workout's visibility in Hevy. Local profiles cannot divide one Hevy account into separate people's histories.
 
 ### Dashboard examples
 

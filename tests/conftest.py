@@ -72,6 +72,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 @pytest.fixture
 def mock_client() -> MagicMock:
     client = MagicMock()
+    client.get_user_info = AsyncMock(return_value={"data": {"name": "Test account"}})
     client.get_workout_count = AsyncMock(return_value=0)
     client.get_workouts = AsyncMock(return_value={"workouts": [], "page_count": 1})
     client.get_workout_events = AsyncMock(return_value={"events": []})

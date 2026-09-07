@@ -39,7 +39,7 @@ async function setup(t, initial = board(), override) {
     if (service === "update_workout") {
       if (data.revision !== state.session.revision) throw new Error("Session changed. Refresh before trying again.");
       state.session = { ...state.session, ...clone(data), revision: data.revision + 1 };
-    } else if (service === "start_workout") state.session = session();
+    } else if (service === "start_workout") state.session = { ...session(), is_private: data.is_private ?? false };
     else if (service === "finish_workout") state.session = { ...state.session, status: "finished", revision: state.session.revision + 1, workout_id: "hevy-123" };
     else if (service === "cancel_workout") state.session = null;
     else if (service === "resolve_workout") state.session = data.resolution === "retry" ? { ...state.session, status: "active", revision: state.session.revision + 1 } : null;
@@ -128,7 +128,7 @@ test("requires finish confirmation, flushes edits, and sends only one finish req
   ctx.input("[data-field=completed]", true, "change");
   ctx.click("finish");
   assert.equal(ctx.calls.some((call) => call.service === "finish_workout"), false);
-  assert.match(ctx.card.shadowRoot.textContent, /1 completed sets will be sent/);
+  assert.match(ctx.card.shadowRoot.textContent, /1 completed set will be sent/);
   ctx.click("finish-confirm");
   ctx.click("finish-confirm");
   await tick();
@@ -355,4 +355,160 @@ test("finish brings its confirmation into view without submitting the workout", 
   assert.equal(scrolled.options.block, "nearest");
   assert.match(panel.textContent, /Finish and send to Hevy/);
   assert.equal(calls.some((call) => call.service === "finish_workout"), false);
+});
+
+test("board controls keep their existing defaults and reject string booleans", async (t) => {
+  const ctx = await setup(t);
+  for (const selector of ['[data-action="remove-exercise"]', '[data-field="type"]', '[data-field="rpe"]', '[data-field="is_private"]']) assert.ok(ctx.card.shadowRoot.querySelector(selector));
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-account-stats]"), null);
+  assert.throws(() => ctx.card.setConfig({ show_rpe: "false" }), /true or false/);
+});
+
+test("hiding controls preserves routine values and saved privacy when edited", async (t) => {
+  const initial = board();
+  initial.session.exercises[0].sets[0].type = "warmup";
+  initial.session.exercises[0].sets[0].rpe = 8.5;
+  const ctx = await setup(t, initial);
+  ctx.card.setConfig({ config_entry_id: "one", show_remove_exercise: false, show_set_type: false, show_rpe: false, show_private_workout: false, default_private_workout: false });
+  await tick();
+  for (const selector of ['[data-action="remove-exercise"]', '[data-field="type"]', '[data-field="rpe"]', '[data-field="is_private"]']) assert.equal(ctx.card.shadowRoot.querySelector(selector), null);
+  ctx.input("[data-field=weight]", 72);
+  ctx.input("[data-field=completed]", true, "change");
+  await ctx.card._save();
+  assert.equal(ctx.state.session.exercises[0].sets[0].type, "warmup");
+  assert.equal(ctx.state.session.exercises[0].sets[0].rpe, 8.5);
+  assert.equal(ctx.state.session.is_private, true);
+  ctx.click("finish");
+  assert.match(ctx.card.shadowRoot.querySelector(".finish-panel").textContent, /Zach as a private workout/);
+});
+
+for (const isPrivate of [true, false]) {
+  test(`starts with an explicit ${isPrivate ? "private" : "public"} default and preserves it on resume`, async (t) => {
+    const ctx = await setup(t, board(null));
+    ctx.card.setConfig({ config_entry_id: "one", default_private_workout: isPrivate, show_private_workout: false });
+    await tick();
+    ctx.click("start");
+    await tick();
+    assert.equal(ctx.calls.find((call) => call.service === "start_workout").service_data.is_private, isPrivate);
+    assert.equal(ctx.state.session.is_private, isPrivate);
+    ctx.card.setConfig({ config_entry_id: "one", default_private_workout: !isPrivate });
+    await tick();
+    assert.equal(ctx.card._draft.is_private, isPrivate);
+    assert.equal(ctx.card.shadowRoot.querySelector("[data-field=is_private]").checked, isPrivate);
+  });
+}
+
+test("completed sets collapse, expand for editing, and undo without losing values", async (t) => {
+  const ctx = await setup(t);
+  ctx.card.setConfig({ config_entry_id: "one", collapse_completed_sets: true });
+  await tick();
+  ctx.input("[data-field=completed]", true, "change");
+  assert.match(ctx.card.shadowRoot.querySelector(".set-summary").textContent, /60 kg · 8 reps/);
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-field=weight]"), null);
+  await ctx.card._save();
+  assert.equal(ctx.state.session.exercises[0].sets[0].weight, 60);
+  ctx.click("expand-set");
+  ctx.input("[data-field=weight]", 65);
+  ctx.click("collapse-set");
+  assert.match(ctx.card.shadowRoot.querySelector(".set-summary").textContent, /65 kg/);
+  ctx.input("[data-field=completed]", false, "change");
+  assert.equal(ctx.card.shadowRoot.querySelector(".collapsed"), null);
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-field=weight]").value, "65");
+  await ctx.card._save();
+  assert.equal(ctx.state.session.exercises[0].sets[0].completed, false);
+});
+
+test("completed sets collapse after reload and retain all sets in saves", async (t) => {
+  const initial = board();
+  initial.session.exercises[0].sets.push({ type: "normal", weight: 75, reps: 5, completed: false });
+  initial.session.exercises[0].sets[0].completed = true;
+  const ctx = await setup(t, initial);
+  ctx.card.setConfig({ config_entry_id: "one", collapse_completed_sets: true });
+  await tick();
+  assert.equal(ctx.card.shadowRoot.querySelectorAll(".collapsed").length, 1);
+  ctx.input('[data-field=weight][data-set="1"]', 80);
+  await ctx.card._save();
+  assert.equal(ctx.state.session.exercises[0].sets.length, 2);
+  assert.equal(ctx.state.session.exercises[0].sets[0].completed, true);
+  ctx.card.remove();
+  ctx.dom.window.document.body.append(ctx.card);
+  await tick();
+  assert.equal(ctx.card.shadowRoot.querySelectorAll(".collapsed").length, 1);
+  assert.equal(ctx.card.shadowRoot.querySelector('[data-field=weight][data-set="1"]').value, "80");
+});
+
+test("collapse leaves invalid measurements visible for correction", async (t) => {
+  const ctx = await setup(t);
+  ctx.card.setConfig({ config_entry_id: "one", collapse_completed_sets: true });
+  await tick();
+  ctx.input("[data-field=weight]", 1000001);
+  ctx.input("[data-field=completed]", true, "change");
+  assert.equal(ctx.card.shadowRoot.querySelector(".collapsed"), null);
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-field=weight]").value, "1000001");
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-field=weight]").getAttribute("aria-invalid"), "true");
+});
+
+test("account names and stats follow the selected account and refresh without a session edit", async (t) => {
+  const initial = board();
+  initial.accounts.push({ config_entry_id: "two", title: "Sam <training>" });
+  initial.stats = { workout_count: 42, weekly_workout_count: 3, current_streak: 2 };
+  const ctx = await setup(t, initial);
+  ctx.card.setConfig({ config_entry_id: "one", show_account_stats: true });
+  await tick();
+  assert.match(ctx.card.shadowRoot.querySelector(".account-stats").textContent, /42/);
+  assert.equal(ctx.card.shadowRoot.querySelector(".account-name").textContent, "Zach");
+  const next = clone(initial);
+  next.config_entry_id = "two";
+  next.stats = { workout_count: 8, weekly_workout_count: 1, current_streak: 0 };
+  next.session = { ...session(), id: "sam-session", title: "Sam workout" };
+  ctx.state = next;
+  await ctx.card._switchAccount("two");
+  assert.equal(ctx.card.shadowRoot.querySelector(".account-name").textContent, "Sam <training>");
+  assert.equal(ctx.card.shadowRoot.querySelector("training"), null);
+  assert.deepEqual([...ctx.card.shadowRoot.querySelectorAll(".account-stats dd")].map((element) => element.textContent), ["8", "1", "0"]);
+  ctx.state.stats.workout_count = 9;
+  await ctx.card._load(true);
+  assert.equal(ctx.card.shadowRoot.querySelector(".account-stats dd").textContent, "9");
+  ctx.state.stats = { workout_count: null };
+  await ctx.card._load(true);
+  assert.equal(ctx.card.shadowRoot.querySelector(".account-stats dd").textContent, "Unavailable");
+});
+
+test("visual editor emits real booleans and retains other settings", async (t) => {
+  const { dom } = await setup(t);
+  const editor = dom.window.document.createElement("hevy-workout-card-editor");
+  editor.setConfig({ type: "custom:hevy-workout-card", config_entry_id: "one", routine_ids: ["upper"], default_private_workout: true });
+  let config;
+  editor.addEventListener("config-changed", (event) => { config = event.detail.config; });
+  const field = editor.shadowRoot.querySelector("[data-config=show_rpe]");
+  field.checked = false;
+  field.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  assert.equal(config.show_rpe, false);
+  assert.equal(config.default_private_workout, true);
+  assert.equal(config.config_entry_id, "one");
+  assert.deepEqual([...config.routine_ids], ["upper"]);
+});
+
+test("account switching blocks submission until pending edits finish saving", async (t) => {
+  const pending = deferred();
+  const initial = board();
+  initial.accounts.push({ config_entry_id: "two", title: "Sam" });
+  initial.session.exercises[0].sets[0].completed = true;
+  const ctx = await setup(t, initial, async (request) => {
+    if (request.service === "update_workout") return pending.promise;
+  });
+  ctx.input("[data-field=weight]", 70);
+  const switching = ctx.card._switchAccount("two");
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-action=account]").value, "one");
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-action=account]").disabled, true);
+  ctx.click("finish");
+  assert.equal(ctx.card.shadowRoot.querySelector(".finish-panel"), null);
+  assert.equal(ctx.calls.filter((call) => call.service === "finish_workout").length, 0);
+  const saved = { ...clone(ctx.card._draft), revision: 2 };
+  ctx.state.config_entry_id = "two";
+  ctx.state.session = { ...session(), id: "sam-session" };
+  pending.resolve({ response: { session: saved } });
+  await switching;
+  assert.equal(ctx.card._entry, "two");
+  assert.equal(ctx.card.shadowRoot.querySelector(".account-name").textContent, "Sam");
 });

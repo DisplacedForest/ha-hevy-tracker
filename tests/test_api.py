@@ -29,3 +29,18 @@ async def test_connection_error_does_not_expose_transport_details():
     with pytest.raises(HevyApiError, match="Connection to Hevy failed") as caught:
         await client.get_workout_count()
     assert "sensitive-transport-value" not in str(caught.value)
+
+
+async def test_user_info_uses_authenticated_account_endpoint():
+    response = MagicMock(status=200)
+    response.json = AsyncMock(return_value={"data": {"id": "user-one", "name": "Sam"}})
+    request = MagicMock()
+    request.__aenter__ = AsyncMock(return_value=response)
+    session = MagicMock()
+    session.request.return_value = request
+    client = HevyApiClient("fixture-key", session)
+    assert await client.get_user_info() == {"data": {"id": "user-one", "name": "Sam"}}
+    args, kwargs = session.request.call_args
+    assert args[0] == "GET"
+    assert args[1].endswith("/v1/user/info")
+    assert kwargs["headers"] == {"api-key": "fixture-key"}

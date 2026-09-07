@@ -61,6 +61,18 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._exercise_templates: dict[str, dict] = {}  # Cache templates by ID
         self._routines: list[dict[str, Any]] = []
         self.workout_session: WorkoutSession | None = None
+        self.account_name: str | None = None
+
+    async def fetch_account_name(self) -> None:
+        try:
+            response = await self.client.get_user_info()
+        except (HevyApiError, ValueError):
+            _LOGGER.debug("Hevy account name is unavailable")
+            return
+        data = response.get("data") if isinstance(response, dict) else None
+        name = data.get("name") if isinstance(data, dict) else None
+        if isinstance(name, str) and name.strip():
+            self.account_name = name.strip()[:200]
 
     @property
     def exercise_templates(self) -> dict[str, dict]:
