@@ -67,11 +67,15 @@ Python tests live in `tests/`. The bundled frontend has browser behavior tests r
 
 ## Testing the live workout card
 
-Copy the integration into a local Home Assistant instance and restart it. Add `/hevy/hevy-workout-card.js?version=1.4.0` as a JavaScript Module resource, then add a `custom:hevy-workout-card` dashboard card.
+Copy the integration into a local Home Assistant instance and restart it. Add `/hevy/hevy-workout-card.js?version=1.5.0` as a JavaScript Module resource, then add a `custom:hevy-workout-card` dashboard card.
 
 Check routine selection, exercise search, set editing, completion checkboxes, finish confirmation, and canceling a session. Verify that refresh, reconnect, and a Home Assistant restart restore the saved session. Confirm that only completed sets appear in the submitted workout, and that changing the integration units does not reinterpret an existing session.
 
 Exercise the uncertain submission state with a controlled API timeout. Check that it requires checking Hevy before retrying or clearing the session. Use fixtures for repeatable error and recovery checks. Record real writes separately, since a fixture response cannot prove that Hevy accepted a workout.
+
+For the standalone browser fixture, serve the repository with a local HTTP server and open `tests/frontend/preview.html`. Add `?customized=1` to exercise hidden controls, private defaults, completed-set summaries, and account stats. The fixture has two accounts with separate drafts and never sends data to Hevy. It complements the local Home Assistant checks.
+
+For 1.5, verify each visual editor switch and the same options in YAML. Check that hidden set type and RPE values survive edits and submission, and that a hidden privacy control uses the chosen default only for new sessions. Expand a completed set, correct it, collapse it again, and undo completion. Test account switching with pending edits and confirm the selected name, routines, draft, stats, and finish destination remain consistent. Repeat at tablet and phone widths.
 
 ## Testing the calendar card
 

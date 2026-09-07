@@ -74,6 +74,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Fetch exercise templates and routines before first data refresh
     await coordinator.fetch_exercise_templates()
     await coordinator.fetch_routines()
+    await coordinator.fetch_account_name()
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()

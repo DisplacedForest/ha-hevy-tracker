@@ -138,6 +138,9 @@ class HevyApiClient:
     async def create_workout(self, workout: dict[str, Any]) -> dict[str, Any]:
         return await self._request("POST", "/workouts", json=workout)
 
+    async def get_user_info(self) -> dict[str, Any]:
+        return await self._request("GET", "/user/info")
+
     async def get_workout_events(
         self, page: int = 1, page_size: int = 10
     ) -> dict[str, Any]:

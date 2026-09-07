@@ -171,7 +171,9 @@ class WorkoutSession:
                     )
         return result
 
-    async def start(self, routine_id: str | None, title: str | None) -> dict:
+    async def start(
+        self, routine_id: str | None, title: str | None, is_private: bool = False
+    ) -> dict:
         async with self.lock:
             if self.closed or self.session:
                 raise ServiceValidationError(
@@ -195,7 +197,7 @@ class WorkoutSession:
                 "start_time": dt_util.utcnow().isoformat(),
                 "weight_unit": self.coordinator._get_weight_unit(),
                 "distance_unit": self.coordinator._get_distance_unit(),
-                "is_private": False,
+                "is_private": is_private,
                 "exercises": self._exercises(
                     routine_exercises(self.coordinator, routine) if routine else []
                 ),
