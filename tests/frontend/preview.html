@@ -30,8 +30,9 @@
     const accounts = [{ config_entry_id: "preview", title: "Alex" }, { config_entry_id: "sam", title: "Sam" }];
     const sessions = JSON.parse(localStorage.getItem("hevy-card-preview-accounts") || "{}");
     const customized = new URLSearchParams(location.search).has("customized");
+    if (new URLSearchParams(location.search).has("no-routines")) routines.length = 0;
     const card = document.querySelector("hevy-workout-card");
-    card.setConfig({ type: "custom:hevy-workout-card", title: "Today's training", ...(customized ? { show_remove_exercise: false, show_set_type: false, show_rpe: false, show_private_workout: false, default_private_workout: true, collapse_completed_sets: true, show_account_stats: true } : {}) });
+    card.setConfig({ type: "custom:hevy-workout-card", title: "Today's training", ...(customized ? { show_header: false, workout_title: "readonly", show_exercise_notes: false, show_add_exercise: false, show_empty_workout: false, show_remove_exercise: false, show_set_type: false, show_rpe: false, show_private_workout: false, default_private_workout: true, collapse_completed_sets: true, show_account_stats: true } : {}) });
     card.hass = {
       connected: true,
       callWS: async ({ service, service_data: data }) => {

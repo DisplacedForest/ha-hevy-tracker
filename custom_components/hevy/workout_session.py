@@ -175,7 +175,7 @@ class WorkoutSession:
         self, routine_id: str | None, title: str | None, is_private: bool = False
     ) -> dict:
         async with self.lock:
-            if self.closed or self.session:
+            if self.closed or (self.session and self.session["status"] != "finished"):
                 raise ServiceValidationError(
                     "Resume or clear the current workout first."
                 )
