@@ -597,3 +597,54 @@ async def test_account_name_stats_and_sessions_stay_with_selected_entry(
         "weekly_workout_count": None,
         "current_streak": None,
     }
+
+
+async def test_next_workout_replaces_only_a_finished_receipt(hass, session_manager):
+    draft = await completed(session_manager)
+    receipt = await session_manager.finish(draft["id"], draft["revision"])
+    reopened = WorkoutSession(hass, "entry-one", session_manager.coordinator)
+    await reopened.load()
+    assert reopened.snapshot() == receipt
+    results = await asyncio.gather(
+        reopened.start("r1", None, True),
+        reopened.start("r1", None, True),
+        return_exceptions=True,
+    )
+    assert sum(isinstance(result, dict) for result in results) == 1
+    assert sum(isinstance(result, ServiceValidationError) for result in results) == 1
+    next_workout = reopened.snapshot()
+    assert next_workout["id"] != receipt["id"]
+    assert next_workout["status"] == "active"
+    assert next_workout["title"].strip()
+    assert next_workout["is_private"] is True
+    assert not any(
+        item["completed"]
+        for exercise in next_workout["exercises"]
+        for item in exercise["sets"]
+    )
+    with pytest.raises(ServiceValidationError):
+        await reopened.finish(draft["id"], draft["revision"])
+    session_manager.coordinator.client.create_workout.assert_awaited_once()
+    restored = WorkoutSession(hass, "entry-one", session_manager.coordinator)
+    await restored.load()
+    assert restored.snapshot() == next_workout
+
+
+@pytest.mark.parametrize("status", ["active", "submitting", "uncertain"])
+async def test_start_preserves_unfinished_session(session_manager, status):
+    draft = await completed(session_manager)
+    draft["status"] = status
+    await session_manager._save(draft)
+    with pytest.raises(ServiceValidationError):
+        await session_manager.start("r1", None)
+    assert session_manager.snapshot() == draft
+    session_manager.coordinator.client.create_workout.assert_not_awaited()
+
+
+async def test_invalid_next_routine_preserves_finished_receipt(session_manager):
+    draft = await completed(session_manager)
+    receipt = await session_manager.finish(draft["id"], draft["revision"])
+    with pytest.raises(ServiceValidationError):
+        await session_manager.start("removed-routine", None)
+    assert session_manager.snapshot() == receipt
+    session_manager.coordinator.client.create_workout.assert_awaited_once()

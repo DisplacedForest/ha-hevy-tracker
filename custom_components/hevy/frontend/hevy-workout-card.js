@@ -2,6 +2,11 @@ const escapeHTML = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => 
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const setTypes = ["normal", "warmup", "failure", "dropset"];
 const boardOptions = {
+  show_header: [true, "Show board header"],
+  show_intro: [false, "Show intro text"],
+  show_exercise_notes: [true, "Show exercise notes"],
+  show_add_exercise: [true, "Show Add an exercise section"],
+  show_empty_workout: [true, "Show Empty workout in routine picker"],
   show_remove_exercise: [true, "Show exercise Remove button"],
   show_set_type: [true, "Show set type"],
   show_rpe: [true, "Show RPE"],
@@ -17,10 +22,9 @@ const styles = `
   header, main, footer { padding: 24px; }
   header { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding-bottom: 16px; }
   h1, h2, h3, p { margin: 0; }
-  h1 { font-size: 24px; font-weight: 650; letter-spacing: -.5px; }
+  h1 { font-size: 20px; font-weight: 650; letter-spacing: -.5px; overflow-wrap: anywhere; }
   h2 { font-size: 20px; margin-bottom: 12px; }
   h3 { font-size: 17px; }
-  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.7px; text-transform: uppercase; color: var(--secondary-text-color, #64717b); margin-bottom: 8px; }
   .muted, .hint { color: var(--secondary-text-color, #64717b); font-size: 13px; line-height: 1.5; }
   .hint { margin-top: 8px; }
   .badge { display: inline-flex; border: 1px solid var(--divider-color, #dde3e7); border-radius: 20px; padding: 7px 10px; font-size: 12px; white-space: nowrap; }
@@ -43,6 +47,13 @@ const styles = `
   .intro { padding: 16px 0 22px; }
   .intro p { margin-top: 8px; max-width: 48ch; line-height: 1.6; }
   .exercise { border-top: 1px solid var(--divider-color, #dde3e7); padding-top: 20px; margin-top: 20px; }
+  .exercise:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+  .workout-title { font-size: 17px; margin: 0; overflow-wrap: anywhere; }
+  main > .stack + .exercise { margin-top: 16px; padding-top: 16px; }
+  .picker-intro, .success { margin-bottom: 16px; overflow-wrap: anywhere; }
+  .success { font-size: 14px; line-height: 1.5; }
+  .without-header { padding-top: 20px; }
+  .account-picker, .account-identity { margin: 0 24px 16px; }
   .exercise-head { margin-bottom: 14px; }
   .exercise-head button, .remove-set { font-size: 12px; min-height: 44px; padding: 8px 10px; }
   .sets { display: grid; gap: 8px; }
@@ -56,6 +67,7 @@ const styles = `
   .account-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 24px 20px; padding: 14px; border: 1px solid var(--divider-color, #dde3e7); border-radius: 10px; }
   .account-stats dt { font-size: 12px; color: var(--secondary-text-color, #64717b); }
   .account-stats dd { margin: 6px 0 0; font-size: 20px; font-weight: 600; }
+  .account-stats dd.muted { font-size: 13px; overflow-wrap: anywhere; }
   .settings { border: 0; border-top: 1px solid var(--divider-color, #dde3e7); padding: 16px 0 0; margin: 0; min-width: 0; }
   .settings legend { font-size: 16px; font-weight: 600; padding: 0 8px 0 0; }
   .set.done { box-shadow: inset 3px 0 0 var(--primary-color, #167b74); }
@@ -80,7 +92,7 @@ const styles = `
   @media (max-width: 450px) {
     header, main, footer { padding-left: 16px; padding-right: 16px; }
     .notice { margin-left: 16px; margin-right: 16px; }
-    h1 { font-size: 21px; }
+    .account-picker, .account-identity { margin-left: 16px; margin-right: 16px; }
     .set { grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 6px; padding: 8px 6px; }
     .set.collapsed { grid-template-columns: 32px minmax(0, 1fr); }
     .set .remove-set { min-height: 46px; }
@@ -112,13 +124,15 @@ class HevyWorkoutCard extends HTMLElement {
 
   static getConfigElement() { return document.createElement("hevy-workout-card-editor"); }
   static getStubConfig() { return { title: "Workout" }; }
-  getCardSize() { return this._draft ? 9 : 4; }
+  getCardSize() { return this._draft && this._draft.status !== "finished" ? 9 : 4; }
 
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Card configuration is required.");
     for (const key of Object.keys(boardOptions)) {
       if (config[key] !== undefined && typeof config[key] !== "boolean") throw new Error(`${boardOptions[key][1]} must be true or false.`);
     }
+    if (config.workout_title !== undefined && !["editable", "readonly", "hidden"].includes(config.workout_title)) throw new Error("Workout title must be editable, readonly, or hidden.");
+    if (config.intro_text !== undefined && typeof config.intro_text !== "string") throw new Error("Intro text must be text.");
     const previous = this._config.config_entry_id;
     this._config = { ...config };
     if (previous !== config.config_entry_id || !this._board) {
@@ -177,6 +191,7 @@ class HevyWorkoutCard extends HTMLElement {
     this._conflict = false;
     this._error = "";
     this._confirm = "";
+    this._routineId = undefined;
     this._invalid.clear();
     this._expandedSets.clear();
     this._needsLoad = true;
@@ -209,6 +224,7 @@ class HevyWorkoutCard extends HTMLElement {
       const oldRevision = this._draft?.revision;
       const oldId = this._draft?.id;
       const oldStatus = this._draft?.status;
+      const oldRoutines = JSON.stringify([this._board?.routines, this._board?.next_routine_id]);
       this._board = board;
       this._entry = board.config_entry_id || this._entry;
       if (!this._dirty && !this._saving) {
@@ -220,7 +236,8 @@ class HevyWorkoutCard extends HTMLElement {
         this._saveError = true;
         this._error = "This workout changed on another screen. Your unsaved edits are still here. Load the saved session to continue.";
       }
-      if (!quiet || oldRevision !== this._draft?.revision || oldId !== this._draft?.id || oldStatus !== this._draft?.status || this._conflict) this._render();
+      const pickerChanged = (!this._draft || this._draft.status === "finished") && oldRoutines !== JSON.stringify([board.routines, board.next_routine_id]);
+      if (!quiet || pickerChanged || oldRevision !== this._draft?.revision || oldId !== this._draft?.id || oldStatus !== this._draft?.status || this._conflict) this._render();
       else this._renderStats();
     } catch (error) {
       if (epoch !== this._epoch) return;
@@ -294,7 +311,7 @@ class HevyWorkoutCard extends HTMLElement {
       if (this._dirty || this._saveError) throw new Error("Save your changes or load the saved session before continuing.");
       this._render();
       const result = await this._service(service, {
-        ...(this._draft ? { session_id: this._draft.id, revision: this._draft.revision } : {}),
+        ...(this._draft && service !== "start_workout" ? { session_id: this._draft.id, revision: this._draft.revision } : {}),
         ...data,
       });
       if (epoch !== this._epoch) return;
@@ -303,12 +320,14 @@ class HevyWorkoutCard extends HTMLElement {
       this._confirm = "";
       this._editVersion = 0;
       this._savedVersion = 0;
+      if (service === "start_workout") this._routineId = undefined;
       await this._load(true);
     } catch (error) {
       if (epoch !== this._epoch) return;
       this._error = this._message(error, "The request could not be completed. Check the saved workout status before trying again.");
       this._confirm = "";
       await this._load(true);
+      if (service === "finish_workout" && this._draft?.status === "finished") this._error = "";
     } finally {
       if (epoch === this._epoch) {
         this._actionBusy = false;
@@ -349,6 +368,7 @@ class HevyWorkoutCard extends HTMLElement {
   _change(event) {
     const target = event.target;
     if (target.dataset.action === "account") { void this._switchAccount(target.value); return; }
+    if (target.dataset.action === "routine") { this._routineId = target.value; return; }
     if (!this._online || !this._draft || this._draft.status !== "active" || this._actionBusy) return;
     const field = target.dataset.field;
     if (field === "is_private") this._draft.is_private = target.checked;
@@ -412,9 +432,15 @@ class HevyWorkoutCard extends HTMLElement {
     }
     else if (action === "start") {
       const routine = this.shadowRoot.querySelector("[data-action=routine]").value;
+      if ((!routine && !this._option("show_empty_workout")) || (routine && !this._board.routines?.some((item) => item.id === routine))) {
+        this._error = "Choose an available routine before starting.";
+        this._renderError();
+        return;
+      }
       void this._action("start_workout", { ...(routine ? { routine_id: routine } : {}), is_private: this._option("default_private_workout") });
     }
     else if (action === "add-exercise") {
+      if (!this._option("show_add_exercise")) return;
       const id = this.shadowRoot.querySelector("[data-action=exercise]").value;
       const exercise = this._board.exercises.find((item) => item.id === id);
       if (!exercise || this._draft.exercises.length >= 100) return;
@@ -477,6 +503,26 @@ class HevyWorkoutCard extends HTMLElement {
   _ordered(items, favorites = []) {
     const ids = Array.isArray(favorites) ? favorites : [];
     return [...items].sort((a, b) => Number(ids.includes(b.id)) - Number(ids.includes(a.id)) || a.title.localeCompare(b.title));
+  }
+
+  _routinePicker(busy) {
+    const routines = this._ordered(this._board.routines || [], this._config.routine_ids);
+    const showEmpty = this._option("show_empty_workout");
+    if (!routines.some((routine) => routine.id === this._routineId) && !(this._routineId === "" && showEmpty)) {
+      this._routineId = routines.find((routine) => routine.id === this._board.next_routine_id)?.id ?? (showEmpty ? "" : routines[0]?.id);
+    }
+    const unavailable = !showEmpty && !routines.length;
+    const intro = this._option("show_intro") ? `<p class="muted picker-intro">${escapeHTML(this._config.intro_text || "Choose a routine.")}</p>` : "";
+    const success = this._draft?.status === "finished" ? `<p class="success" role="status">${escapeHTML(this._draft.title)} was sent to ${escapeHTML(this._accountTitle())}.</p>` : "";
+    return `${success}${intro}<div class="stack"><label>Routine<select data-action="routine" ${busy || (unavailable ? "disabled" : "")}>${showEmpty ? `<option value="" ${this._routineId === "" ? "selected" : ""}>Empty workout</option>` : ""}${unavailable ? '<option value="">No routines available</option>' : ""}${routines.map((routine) => `<option value="${escapeHTML(routine.id)}" ${routine.id === this._routineId ? "selected" : ""}>${escapeHTML(routine.title)}</option>`).join("")}</select></label>${unavailable ? '<p class="muted">Add a routine in Hevy, then reload its integration in Home Assistant. Or enable Empty workout in this card\'s settings.</p>' : ""}<button class="primary" data-action="start" ${busy || (unavailable ? "disabled" : "")}>${this._actionBusy ? "Starting..." : "Start workout"}</button></div>`;
+  }
+
+  _workoutFields(disabled) {
+    const invalid = this._invalid.has("title::");
+    const mode = invalid ? "editable" : this._config.workout_title || "editable";
+    const title = mode === "editable" ? `<label>Workout title<input data-field="title" value="${escapeHTML(invalid ? this._invalid.get("title::") : this._draft.title)}" required maxlength="200" ${invalid ? 'aria-invalid="true"' : ""} ${disabled}></label>` : mode === "readonly" ? `<h2 class="workout-title">${escapeHTML(this._draft.title)}</h2>` : "";
+    const privacy = this._option("show_private_workout") ? `<label class="check"><input type="checkbox" data-field="is_private" ${this._draft.is_private ? "checked" : ""} ${disabled}>Private workout</label>` : "";
+    return title || privacy ? `<div class="stack">${title}${privacy}</div>` : "";
   }
 
   _exerciseOptions() {
@@ -564,7 +610,9 @@ class HevyWorkoutCard extends HTMLElement {
 
   _exercise(exercise, index, disabled) {
     const remove = this._option("show_remove_exercise") ? `<button class="danger" data-action="remove-exercise" data-exercise="${index}" aria-label="Remove ${escapeHTML(exercise.name)}" ${disabled}>Remove</button>` : "";
-    return `<section class="exercise"><div class="row spread exercise-head"><h3>${escapeHTML(exercise.name)}</h3>${remove}</div><div class="sets">${exercise.sets.map((_, setIndex) => this._set(exercise, index, setIndex, disabled)).join("")}</div><div class="exercise-actions"><button data-action="add-set" data-exercise="${index}" ${disabled}>+ Add set</button></div><details><summary>Exercise notes</summary><label>Notes<textarea data-field="notes" data-exercise="${index}" aria-label="Notes for ${escapeHTML(exercise.name)}" maxlength="2000" ${disabled}>${escapeHTML(exercise.notes || "")}</textarea></label></details></section>`;
+    const invalidNotes = this._invalid.has(`notes:${index}:`);
+    const notes = this._option("show_exercise_notes") || invalidNotes ? `<details ${invalidNotes ? "open" : ""}><summary>Exercise notes</summary><label>Notes<textarea data-field="notes" data-exercise="${index}" aria-label="Notes for ${escapeHTML(exercise.name)}" maxlength="2000" ${invalidNotes ? 'aria-invalid="true"' : ""} ${disabled}>${escapeHTML(invalidNotes ? this._invalid.get(`notes:${index}:`) : exercise.notes || "")}</textarea></label></details>` : "";
+    return `<section class="exercise"><div class="row spread exercise-head"><h3>${escapeHTML(exercise.name)}</h3>${remove}</div><div class="sets">${exercise.sets.map((_, setIndex) => this._set(exercise, index, setIndex, disabled)).join("")}</div><div class="exercise-actions"><button data-action="add-set" data-exercise="${index}" ${disabled}>+ Add set</button></div>${notes}</section>`;
   }
 
   _renderStats() {
@@ -629,20 +677,21 @@ class HevyWorkoutCard extends HTMLElement {
     let footer = "";
     if (!this._board) content = '<p class="empty" role="status">Loading your workout board...</p>';
     else if (!this._entry) content = '<p class="empty">Choose a Hevy account to open its workout board.</p>';
-    else if (!draft) {
-      content = `<div class="intro"><h2>Ready when you are.</h2><p class="muted">Choose a routine or start from scratch. Your progress is saved here as you train.</p></div><div class="stack"><label>Routine<select data-action="routine" ${busy}><option value="">Empty workout</option>${this._ordered(this._board.routines || [], this._config.routine_ids).map((routine) => `<option value="${escapeHTML(routine.id)}" ${routine.id === this._board.next_routine_id ? "selected" : ""}>${escapeHTML(routine.title)}</option>`).join("")}</select></label><button class="primary" data-action="start" ${busy}>${this._actionBusy ? "Starting..." : "Start workout"}</button></div>`;
-    } else if (draft.status === "finished") {
-      content = `<div class="intro"><p class="eyebrow">Workout complete</p><h2>${escapeHTML(draft.title)}</h2><p>Your completed sets have been sent to Hevy.</p>${draft.workout_id ? `<p class="muted">Workout ID: ${escapeHTML(draft.workout_id)}</p>` : ""}</div>`;
-      footer = '<button class="primary" data-action="cancel">New workout</button>';
+    else if (!draft || draft.status === "finished") {
+      content = this._routinePicker(busy);
     } else if (draft.status === "uncertain") {
       content = `<div class="intro"><h2>Check your workout in Hevy</h2><p>Home Assistant could not confirm whether Hevy saved this workout. Your session is preserved. Check Hevy before choosing what to do next.</p></div><div class="row actions"><button data-action="discard" ${busy}>Clear checked session</button><button class="primary" data-action="retry" ${busy}>Workout is missing</button></div>`;
     } else if (draft.status === "submitting") {
       content = `<div class="intro" role="status"><h2>Sending your workout...</h2><p>Keep this session open. Its saved status will update automatically.</p></div>`;
     } else {
-      content = `<div class="stack"><label>Workout title<input data-field="title" value="${escapeHTML(this._invalid.has("title::") ? this._invalid.get("title::") : draft.title)}" required maxlength="200" ${this._invalid.has("title::") ? 'aria-invalid="true"' : ""} ${disabled}></label>${this._option("show_private_workout") ? `<label class="check"><input type="checkbox" data-field="is_private" ${draft.is_private ? "checked" : ""} ${disabled}>Private workout</label>` : ""}</div>${draft.exercises.length ? draft.exercises.map((exercise, index) => this._exercise(exercise, index, disabled)).join("") : '<p class="empty">Add your first exercise below, then check off each set as you finish it.</p>'}<section class="picker stack"><h3>Add an exercise</h3><label>Search exercises<input data-action="search" type="search" value="${escapeHTML(this._search)}" placeholder="Name or muscle group" ${disabled}></label><label>Exercise<select data-action="exercise" ${disabled}>${this._exerciseOptions()}</select></label><button data-action="add-exercise" ${disabled}>+ Add exercise</button></section>`;
+      const picker = this._option("show_add_exercise") ? `<section class="picker stack"><h3>Add an exercise</h3><label>Search exercises<input data-action="search" type="search" value="${escapeHTML(this._search)}" placeholder="Name or muscle group" ${disabled}></label><label>Exercise<select data-action="exercise" ${disabled}>${this._exerciseOptions()}</select></label><button data-action="add-exercise" ${disabled}>+ Add exercise</button></section>` : "";
+      const empty = this._option("show_add_exercise") ? "Add an exercise to begin." : "This workout has no exercises. Enable Add an exercise in this card's settings, or discard this session and choose a routine.";
+      content = `${this._workoutFields(disabled)}${draft.exercises.length ? draft.exercises.map((exercise, index) => this._exercise(exercise, index, disabled)).join("") : `<p class="empty">${empty}</p>`}${picker}`;
       footer = `<div class="row spread"><span class="muted" data-count></span><span class="saved" data-save-status role="status" aria-live="polite"></span></div><div class="progress" aria-hidden="true"><span></span></div><div class="row actions"><button class="danger" data-action="cancel" ${busy}>Discard session</button><button class="primary" data-action="finish" ${busy}>Finish workout</button></div>`;
     }
-    this.shadowRoot.innerHTML = `<style>${styles}</style><ha-card><header><div><p class="eyebrow">Hevy · Workout board</p><h1>${escapeHTML(this._config.title || "Workout")}</h1>${this._entry && this._board ? `<p class="muted account-name">${escapeHTML(this._accountTitle())}</p>` : ""}</div>${draft ? `<span class="badge">${escapeHTML(({ active: "In progress", submitting: "Sending", uncertain: "Check Hevy", finished: "Finished" })[draft.status] || draft.status)}</span>` : ""}</header><div data-errors></div>${accounts.length > 1 ? `<div class="notice"><label>Who is working out?<select data-action="account" ${busy}><option value="">Choose an account</option>${accounts.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === this._entry ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select></label></div>` : ""}${this._option("show_account_stats") && this._entry ? `<dl class="account-stats" data-account-stats aria-label="Stats for ${escapeHTML(this._accountTitle())}"></dl>` : ""}<main>${content}</main>${footer || this._confirm ? `<footer>${footer}${this._confirmation()}</footer>` : ""}</ha-card>`;
+    const accountName = this._entry && this._board && accounts.length <= 1 ? `<p class="muted account-name">${escapeHTML(this._accountTitle())}</p>` : "";
+    const header = this._option("show_header") ? `<header><div><h1>${escapeHTML(this._config.title || "Workout")}</h1>${accountName}</div>${draft && draft.status !== "finished" ? `<span class="badge">${escapeHTML(({ active: "In progress", submitting: "Sending", uncertain: "Check Hevy" })[draft.status] || draft.status)}</span>` : ""}</header>` : accountName ? `<div class="account-identity">${accountName}</div>` : "";
+    this.shadowRoot.innerHTML = `<style>${styles}</style><ha-card class="${this._option("show_header") ? "" : "without-header"}">${header}<div data-errors></div>${accounts.length > 1 ? `<div class="account-picker"><label>Who is working out?<select data-action="account" ${busy}><option value="">Choose an account</option>${accounts.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === this._entry ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select></label></div>` : ""}${this._option("show_account_stats") && this._entry ? `<dl class="account-stats" data-account-stats aria-label="Stats for ${escapeHTML(this._accountTitle())}"></dl>` : ""}<main>${content}</main>${footer || this._confirm ? `<footer>${footer}${this._confirmation()}</footer>` : ""}</ha-card>`;
     this._renderError();
     this._status();
     this._renderStats();
@@ -685,7 +734,7 @@ class HevyWorkoutCardEditor extends HTMLElement {
 
   _render() {
     const config = this._config;
-    this.shadowRoot.innerHTML = `<style>${styles}</style><div class="stack"><label>Title<input data-config="title" value="${escapeHTML(config.title || "Workout")}"></label><label>Hevy account${this._accountList ? `<select data-config="config_entry_id"><option value="">Choose on the card</option>${this._accountList.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === config.config_entry_id ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select>` : `<input data-config="config_entry_id" value="${escapeHTML(config.config_entry_id || "")}" placeholder="Optional config entry ID">`}</label><label>Favorite routine IDs<input data-config="routine_ids" value="${escapeHTML((config.routine_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><label>Favorite exercise IDs<input data-config="exercise_ids" value="${escapeHTML((config.exercise_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><p class="hint">Favorites appear first in the pickers. Other routines and exercises remain available. Sessions are saved in Home Assistant for the selected account.</p><fieldset class="settings"><legend>Board display</legend>${Object.entries(boardOptions).map(([key, [fallback, label]]) => `<label class="check"><input type="checkbox" data-config="${key}" ${(config[key] ?? fallback) ? "checked" : ""}>${label}</label>`).join("")}<p class="hint">The privacy default applies when starting a new workout. Saved sessions keep their privacy setting. Hidden set type and RPE values are preserved.</p></fieldset></div>`;
+    this.shadowRoot.innerHTML = `<style>${styles}</style><div class="stack"><label>Board title<input data-config="title" value="${escapeHTML(config.title || "Workout")}"></label><label>Intro text<input data-config="intro_text" value="${escapeHTML(config.intro_text || "Choose a routine.")}"></label><label>Hevy account${this._accountList ? `<select data-config="config_entry_id"><option value="">Choose on the card</option>${this._accountList.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === config.config_entry_id ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select>` : `<input data-config="config_entry_id" value="${escapeHTML(config.config_entry_id || "")}" placeholder="Optional config entry ID">`}</label><label>Favorite routine IDs<input data-config="routine_ids" value="${escapeHTML((config.routine_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><label>Favorite exercise IDs<input data-config="exercise_ids" value="${escapeHTML((config.exercise_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><p class="hint">Favorites appear first in the pickers. Other routines and exercises remain available. Sessions are saved in Home Assistant for the selected account.</p><fieldset class="settings"><legend>Board display</legend><label>Workout title<select data-config="workout_title">${[["editable", "Editable input"], ["readonly", "Text only"], ["hidden", "Hidden"]].map(([value, label]) => `<option value="${value}" ${(config.workout_title || "editable") === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>${Object.entries(boardOptions).map(([key, [fallback, label]]) => `<label class="check"><input type="checkbox" data-config="${key}" ${(config[key] ?? fallback) ? "checked" : ""}>${label}</label>`).join("")}<p class="hint">The privacy default applies when starting a new workout. Saved sessions keep their privacy setting. Hidden values are preserved. Invalid edits stay visible until corrected or the saved session is loaded.</p></fieldset></div>`;
   }
 }
 

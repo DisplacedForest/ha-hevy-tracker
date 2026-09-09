@@ -78,10 +78,10 @@ The bundled live workout card and native calendar card work alongside your exist
 
 ### Live workout card
 
-The card is included with the integration and requires Home Assistant 2024.7 or later. After installing or updating to 1.5 and restarting Home Assistant:
+The card is included with the integration and requires Home Assistant 2024.7 or later. After installing or updating to 1.5.1 and restarting Home Assistant:
 
 1. Enable **Advanced mode** in your Home Assistant profile if Resources is hidden.
-2. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.5.0` with resource type **JavaScript Module**.
+2. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.5.1` with resource type **JavaScript Module**.
 3. Add a manual card to your dashboard:
 
 ```yaml
@@ -111,10 +111,18 @@ The card requires a connection to Home Assistant to save changes and does not ac
 
 ### Customize your workout board
 
-Open the card's visual editor to choose which controls appear. Every setting below is optional. Existing cards keep their current defaults.
+Open the card's visual editor to choose which controls appear. Every setting below is optional. The header is smaller and introductory text is hidden by default. Workout controls keep their existing defaults.
 
 | Setting | Default | What it does |
 |---------|---------|--------------|
+| `title` | `Workout` | Sets the board heading. |
+| `show_header` | `true` | Shows the board heading and session badge. The account label or picker stays visible when the header is hidden. |
+| `show_intro` | `false` | Shows a short intro above the routine picker. |
+| `intro_text` | `Choose a routine.` | Sets the intro text when `show_intro` is enabled. |
+| `workout_title` | `editable` | Use `editable` for an input, `readonly` for plain text, or `hidden` to hide the session title. |
+| `show_exercise_notes` | `true` | Shows exercise notes inputs. Hidden notes keep their saved values. |
+| `show_add_exercise` | `true` | Shows the entire Add an exercise section. Existing exercises and their sets stay available. |
+| `show_empty_workout` | `true` | Shows Empty workout in the routine picker. When hidden, an available routine is selected. Starting is disabled if there are no routines. |
 | `show_remove_exercise` | `true` | Shows the Remove button next to each exercise. Set removal stays available. |
 | `show_set_type` | `true` | Shows the set type dropdown. Hiding it preserves the routine or saved set type. |
 | `show_rpe` | `true` | Shows the RPE dropdown. Hiding it preserves any saved RPE. |
@@ -127,6 +135,11 @@ For a compact board with private workouts and account stats:
 
 ```yaml
 type: custom:hevy-workout-card
+show_header: false
+workout_title: readonly
+show_exercise_notes: false
+show_add_exercise: false
+show_empty_workout: false
 show_remove_exercise: false
 show_set_type: false
 show_rpe: false
@@ -136,7 +149,11 @@ collapse_completed_sets: true
 show_account_stats: true
 ```
 
-Display settings belong to each card. Saved sessions keep their privacy, set types, RPE, and completed sets when opened from another card with different display settings. Hiding a control does not erase its value. The finish confirmation always shows the account and actual workout privacy before sending.
+Display settings belong to each card. Saved sessions keep their title, notes, privacy, set types, RPE, and completed sets when opened from another card with different display settings. Hiding a control does not erase its value. Invalid edits stay visible until corrected or the saved session is loaded. Hidden titles still use the routine title, or "Workout" for an empty workout. The finish confirmation always shows the account and actual workout privacy before sending.
+
+Routines load when the Hevy integration starts. After adding or changing a routine in Hevy, reload that integration in Home Assistant to update the picker.
+
+After a confirmed submission, the card returns to the routine picker with a short success message. Your selected account stays the same and its stats refresh. Start the next workout directly. The finished session stays saved until then, so there is no extra clear-session step. Pending and uncertain submissions stay on screen until their outcome is resolved.
 
 ### Shared tablets and multiple accounts
 

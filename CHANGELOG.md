@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-09
+
+A smaller workout board with optional inputs and fewer steps between workouts.
+
+- Removed the extra header text and hid the intro by default. The heading and intro can be customized or hidden.
+- Added editable, text-only, and hidden workout title modes, plus options to hide exercise notes and the Add an exercise section. Saved values are preserved.
+- Added an option to hide Empty workout. The picker selects an available routine and handles accounts without routines.
+- Return to the routine picker after a confirmed submission, with a short success message and the same account selected. Start the next workout without clearing the finished session first.
+- Keep pending, failed, and uncertain submissions available for recovery.
+
+After updating and restarting Home Assistant, change the dashboard resource URL to `/hevy/hevy-workout-card.js?version=1.5.1` and reload the browser. The new settings are in the visual editor and the [board configuration guide](https://github.com/DisplacedForest/ha-hevy-tracker#customize-your-workout-board).
+
 ## [1.5.0] - 2026-09-07
 
 A more customizable workout board with clearer account selection.
@@ -256,5 +268,7 @@ Requires Home Assistant 2024.7 or later and Hevy Pro. After updating, add `/hevy
 - Configurable update intervals to manage API usage
 
 
-[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.3.0...v1.4.0
