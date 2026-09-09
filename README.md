@@ -151,6 +151,8 @@ show_account_stats: true
 
 Display settings belong to each card. Saved sessions keep their title, notes, privacy, set types, RPE, and completed sets when opened from another card with different display settings. Hiding a control does not erase its value. Invalid edits stay visible until corrected or the saved session is loaded. Hidden titles still use the routine title, or "Workout" for an empty workout. The finish confirmation always shows the account and actual workout privacy before sending.
 
+Routines load when the Hevy integration starts. After adding or changing a routine in Hevy, reload that integration in Home Assistant to update the picker.
+
 After a confirmed submission, the card returns to the routine picker with a short success message. Your selected account stays the same and its stats refresh. Start the next workout directly. The finished session stays saved until then, so there is no extra clear-session step. Pending and uncertain submissions stay on screen until their outcome is resolved.
 
 ### Shared tablets and multiple accounts

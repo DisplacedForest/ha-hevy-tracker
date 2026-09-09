@@ -608,9 +608,10 @@ test("hidden Empty workout blocks empty or invalid starts and recovers when rout
   assert.equal(ctx.card.shadowRoot.querySelector("[data-action=start]").disabled, true);
   ctx.click("start");
   assert.equal(ctx.calls.some((call) => call.service === "start_workout"), false);
+  assert.match(ctx.card.shadowRoot.querySelector("main").textContent, /reload its integration in Home Assistant/);
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-action=refresh]"), null);
   ctx.state.routines = board().routines;
-  ctx.click("refresh");
-  await tick();
+  await ctx.card._load(true);
   assert.equal(ctx.card.shadowRoot.querySelector("[data-action=start]").disabled, false);
   ctx.input("[data-action=routine]", "missing", "change");
   ctx.click("start");
