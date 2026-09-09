@@ -34,5 +34,17 @@ jobs:
     name: Validate with Hassfest
     steps:
       - uses: "actions/checkout@v7"
+      - name: Pull Hassfest image
+        timeout-minutes: 3
+        run: |
+          for attempt in 1 2 3; do
+            if docker pull ghcr.io/home-assistant/hassfest:latest; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep 10
+            fi
+          done
+          exit 1
       - name: Hassfest validation
         uses: "home-assistant/actions/hassfest@master"
