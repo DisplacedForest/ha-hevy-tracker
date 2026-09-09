@@ -67,6 +67,7 @@ const styles = `
   .account-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 24px 20px; padding: 14px; border: 1px solid var(--divider-color, #dde3e7); border-radius: 10px; }
   .account-stats dt { font-size: 12px; color: var(--secondary-text-color, #64717b); }
   .account-stats dd { margin: 6px 0 0; font-size: 20px; font-weight: 600; }
+  .account-stats dd.muted { font-size: 13px; overflow-wrap: anywhere; }
   .settings { border: 0; border-top: 1px solid var(--divider-color, #dde3e7); padding: 16px 0 0; margin: 0; min-width: 0; }
   .settings legend { font-size: 16px; font-weight: 600; padding: 0 8px 0 0; }
   .set.done { box-shadow: inset 3px 0 0 var(--primary-color, #167b74); }
