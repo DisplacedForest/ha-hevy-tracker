@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Remove the redundant Home Assistant aiohttp dependency declaration to pass current Hassfest validation.
+
 - Add independent board settings to hide the account name and prefill routine weights or reps from the selected account's recent workout history. Saved sessions keep their measurements and the multiaccount picker remains available.
 
 ## [1.5.1] - 2026-09-09
