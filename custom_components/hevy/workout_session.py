@@ -4,6 +4,7 @@ import asyncio
 import logging
 import math
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
@@ -92,6 +93,71 @@ def routine_exercises(coordinator: HevyDataUpdateCoordinator, routine: dict) -> 
     return exercises
 
 
+def prefill_exercises(
+    coordinator: HevyDataUpdateCoordinator,
+    exercises: list,
+    weight: bool,
+    reps: bool,
+) -> None:
+    dated_workouts = []
+    for workout in coordinator._workout_history:
+        if not isinstance(workout, dict):
+            continue
+        try:
+            started = datetime.fromisoformat(
+                workout["start_time"].replace("Z", "+00:00")
+            )
+            if started.tzinfo is None:
+                continue
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
+        dated_workouts.append((started, workout))
+    latest: dict[str, dict] = {}
+    for _, workout in sorted(dated_workouts, key=lambda item: item[0], reverse=True):
+        history_exercises = workout.get("exercises")
+        if not isinstance(history_exercises, list):
+            continue
+        for exercise in history_exercises:
+            if not isinstance(exercise, dict):
+                continue
+            template_id = exercise.get("exercise_template_id")
+            if isinstance(template_id, str):
+                latest.setdefault(template_id, exercise)
+    for exercise in exercises:
+        previous = latest.get(exercise["exercise_template_id"], {}).get("sets")
+        if not isinstance(previous, list):
+            continue
+        by_type: dict[str, list[dict]] = {}
+        for item in previous:
+            if not isinstance(item, dict):
+                continue
+            set_type = item.get("type", "normal")
+            if isinstance(set_type, str) and set_type in SET_TYPES:
+                by_type.setdefault(set_type, []).append(item)
+        positions: dict[str, int] = {}
+        for item in exercise["sets"]:
+            set_type = item["type"]
+            position = positions.get(set_type, 0)
+            positions[set_type] = position + 1
+            matches = by_type.get(set_type, [])
+            if position >= len(matches):
+                continue
+            previous_set = matches[position]
+            if weight:
+                try:
+                    converted = coordinator._convert_weight(
+                        finite_number(previous_set.get("weight_kg"))
+                    )
+                    item["weight"] = finite_number(converted)
+                except vol.Invalid:
+                    pass
+            if reps:
+                try:
+                    item["reps"] = whole_number(previous_set.get("reps"))
+                except vol.Invalid:
+                    pass
+
+
 class WorkoutSession:
     def __init__(
         self, hass: HomeAssistant, entry_id: str, coordinator: HevyDataUpdateCoordinator
@@ -172,7 +238,12 @@ class WorkoutSession:
         return result
 
     async def start(
-        self, routine_id: str | None, title: str | None, is_private: bool = False
+        self,
+        routine_id: str | None,
+        title: str | None,
+        is_private: bool = False,
+        prefill_previous_weight: bool = False,
+        prefill_previous_reps: bool = False,
     ) -> dict:
         async with self.lock:
             if self.closed or (self.session and self.session["status"] != "finished"):
@@ -187,6 +258,14 @@ class WorkoutSession:
                 )
                 if routine is None:
                     raise ServiceValidationError("This routine is no longer available.")
+            exercises = routine_exercises(self.coordinator, routine) if routine else []
+            if prefill_previous_weight or prefill_previous_reps:
+                prefill_exercises(
+                    self.coordinator,
+                    exercises,
+                    prefill_previous_weight,
+                    prefill_previous_reps,
+                )
             session = {
                 "id": uuid4().hex,
                 "revision": 1,
@@ -198,9 +277,7 @@ class WorkoutSession:
                 "weight_unit": self.coordinator._get_weight_unit(),
                 "distance_unit": self.coordinator._get_distance_unit(),
                 "is_private": is_private,
-                "exercises": self._exercises(
-                    routine_exercises(self.coordinator, routine) if routine else []
-                ),
+                "exercises": self._exercises(exercises),
             }
             if not session["title"]:
                 raise ServiceValidationError("Enter a workout title.")

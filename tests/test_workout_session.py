@@ -648,3 +648,247 @@ async def test_invalid_next_routine_preserves_finished_receipt(session_manager):
         await session_manager.start("removed-routine", None)
     assert session_manager.snapshot() == receipt
     session_manager.coordinator.client.create_workout.assert_awaited_once()
+
+
+def history_workout(started, sets, template_id="t1"):
+    return {
+        "start_time": started,
+        "routine_id": "another-routine",
+        "exercises": [{"exercise_template_id": template_id, "sets": sets}],
+    }
+
+
+@pytest.mark.parametrize("metric", [False, True])
+@pytest.mark.parametrize(
+    "weight,reps", [(False, False), (True, False), (False, True), (True, True)]
+)
+async def test_prefill_independent_flags_newest_exercise_and_persistence(
+    hass, session_manager, metric, weight, reps
+):
+    coordinator = session_manager.coordinator
+    coordinator.unit_system = "metric" if metric else "imperial"
+    coordinator._workout_history = [
+        history_workout(
+            "2026-09-27T10:00:00Z", [{"type": "normal", "weight_kg": 10, "reps": 1}]
+        ),
+        history_workout(
+            "2026-09-29T10:00:00Z",
+            [
+                {"type": "warmup", "weight_kg": 0, "reps": 0},
+                {"type": "normal", "weight_kg": 80, "reps": 12},
+            ],
+        ),
+        history_workout(
+            "2026-09-30T10:00:00Z", [{"type": "normal", "duration_seconds": 60}], "t3"
+        ),
+    ]
+    history = deepcopy(coordinator._workout_history)
+    routines = deepcopy(coordinator.routines)
+    draft = await session_manager.start(
+        "r1", None, prefill_previous_weight=weight, prefill_previous_reps=reps
+    )
+    warmup, normal = draft["exercises"][0]["sets"]
+    assert warmup["weight"] == (0 if weight else coordinator._convert_weight(61.24))
+    assert normal["weight"] == (
+        coordinator._convert_weight(80)
+        if weight
+        else coordinator._convert_weight(102.06)
+    )
+    assert warmup["reps"] == (0 if reps else 8)
+    assert normal["reps"] == (12 if reps else 5)
+    assert draft["exercises"][1]["sets"][0]["duration_seconds"] == 1500
+    assert all(
+        not item["completed"]
+        for exercise in draft["exercises"]
+        for item in exercise["sets"]
+    )
+    assert draft["revision"] == 1
+    reopened = WorkoutSession(hass, "entry-one", coordinator)
+    await reopened.load()
+    assert reopened.snapshot() == draft
+    assert coordinator._workout_history == history
+    assert coordinator.routines == routines
+    coordinator.client.get_workouts.assert_not_called()
+    with pytest.raises(ServiceValidationError, match="Resume"):
+        await session_manager.start(
+            "r1",
+            None,
+            prefill_previous_weight=not weight,
+            prefill_previous_reps=not reps,
+        )
+    assert session_manager.snapshot() == draft
+
+
+async def test_prefill_matches_set_types_without_changing_routine_shape(
+    session_manager,
+):
+    coordinator = session_manager.coordinator
+    routine = coordinator.routines[0]
+    routine["exercises"][0]["sets"] = [
+        {"type": "warmup", "weight_kg": 10, "reps": 20},
+        {"type": "warmup", "weight_kg": 20, "reps": 15},
+        {"type": "normal", "weight_kg": 50, "reps": 8},
+        {"type": "failure", "weight_kg": 40, "reps": 5},
+        {"type": "normal", "weight_kg": 50, "reps": 8},
+        {"type": "normal", "weight_kg": 50, "reps": 8},
+    ]
+    coordinator._workout_history = [
+        history_workout(
+            "2026-09-29T10:00:00Z",
+            [
+                {"type": "normal", "weight_kg": 70, "reps": 9},
+                {"type": "warmup", "weight_kg": 5, "reps": 25},
+                {"type": "normal", "weight_kg": 75, "reps": 7},
+                {"type": "dropset", "weight_kg": 30, "reps": 14},
+            ],
+        )
+    ]
+    draft = await session_manager.start(
+        "r1", None, prefill_previous_weight=True, prefill_previous_reps=True
+    )
+    sets = draft["exercises"][0]["sets"]
+    assert [item["type"] for item in sets] == [
+        "warmup",
+        "warmup",
+        "normal",
+        "failure",
+        "normal",
+        "normal",
+    ]
+    assert [item["reps"] for item in sets] == [25, 15, 9, 5, 7, 8]
+    assert [item["weight"] for item in sets] == [
+        coordinator._convert_weight(value) for value in [5, 20, 70, 40, 75, 50]
+    ]
+
+
+@pytest.mark.parametrize(
+    "value", [None, "50", True, -1, float("nan"), float("inf"), 1000001, 2.5]
+)
+async def test_invalid_history_fields_preserve_defaults_independently(
+    session_manager, value
+):
+    coordinator = session_manager.coordinator
+    coordinator._workout_history = [
+        history_workout(
+            "2026-09-29T10:00:00Z",
+            [
+                {"type": "warmup", "weight_kg": value, "reps": 14},
+                {"type": "normal", "weight_kg": 30, "reps": value},
+            ],
+        )
+    ]
+    draft = await session_manager.start(
+        "r1", None, prefill_previous_weight=True, prefill_previous_reps=True
+    )
+    warmup, normal = draft["exercises"][0]["sets"]
+    assert warmup["weight"] == coordinator._convert_weight(
+        2.5 if value == 2.5 else 61.24
+    )
+    assert warmup["reps"] == 14
+    assert normal["weight"] == coordinator._convert_weight(30)
+    assert normal["reps"] == 5
+
+
+@pytest.mark.parametrize(
+    "history",
+    [
+        [],
+        [None, {}, {"start_time": 4}, {"start_time": "invalid"}],
+        [history_workout("2026-09-30T10:00:00Z", None)],
+        [
+            {
+                "start_time": "2026-09-30T10:00:00Z",
+                "exercises": [None, {"exercise_template_id": []}],
+            }
+        ],
+    ],
+)
+async def test_missing_or_malformed_history_keeps_routine(session_manager, history):
+    coordinator = session_manager.coordinator
+    coordinator._workout_history = history
+    expected = await session_manager.start("r1", None)
+    await session_manager.cancel(expected["id"], expected["revision"])
+    actual = await session_manager.start(
+        "r1", None, prefill_previous_weight=True, prefill_previous_reps=True
+    )
+    assert actual["exercises"] == expected["exercises"]
+
+
+async def test_latest_occurrence_does_not_fall_back_to_older_measurements(
+    session_manager,
+):
+    coordinator = session_manager.coordinator
+    coordinator._workout_history = [
+        history_workout("2026-09-28T10:00:00Z", [{"weight_kg": 70, "reps": 10}]),
+        history_workout(
+            "2026-09-29T10:00:00Z",
+            [None, {"type": [], "weight_kg": 90}, {"type": "normal", "reps": 0}],
+        ),
+    ]
+    draft = await session_manager.start(
+        "r1", None, prefill_previous_weight=True, prefill_previous_reps=True
+    )
+    normal = draft["exercises"][0]["sets"][1]
+    assert normal["weight"] == coordinator._convert_weight(102.06)
+    assert normal["reps"] == 0
+
+
+async def test_prefill_services_use_selected_accounts_history(
+    hass, session_manager, metric_coordinator
+):
+    first = MockConfigEntry(domain=DOMAIN, data={CONF_API_KEY: "fixture-one"})
+    second = MockConfigEntry(domain=DOMAIN, data={CONF_API_KEY: "fixture-two"})
+    first.add_to_hass(hass)
+    second.add_to_hass(hass)
+    other_coordinator = metric_coordinator
+    other_coordinator._exercise_templates = deepcopy(
+        session_manager.coordinator.exercise_templates
+    )
+    other_coordinator._routines = deepcopy(session_manager.coordinator.routines)
+    other = WorkoutSession(hass, second.entry_id, other_coordinator)
+    for entry, manager, weight, reps in [
+        (first, session_manager, 20, 6),
+        (second, other, 80, 12),
+    ]:
+        manager.coordinator.workout_session = manager
+        manager.coordinator._workout_history = [
+            history_workout(
+                "2026-09-29T10:00:00Z",
+                [{"type": "normal", "weight_kg": weight, "reps": reps}],
+            )
+        ]
+    hass.data[DOMAIN] = {
+        first.entry_id: session_manager.coordinator,
+        second.entry_id: other_coordinator,
+    }
+    register_session_services(hass)
+    for entry, manager, weight, reps in [
+        (first, session_manager, 20, 6),
+        (second, other, 80, 12),
+    ]:
+        result = await hass.services.async_call(
+            DOMAIN,
+            "start_workout",
+            {
+                "config_entry_id": entry.entry_id,
+                "routine_id": "r1",
+                "prefill_previous_weight": True,
+                "prefill_previous_reps": True,
+            },
+            blocking=True,
+            return_response=True,
+        )
+        item = result["session"]["exercises"][0]["sets"][1]
+        assert item["weight"] == manager.coordinator._convert_weight(weight)
+        assert item["reps"] == reps
+    assert session_manager.snapshot()["exercises"][0]["sets"][1]["reps"] == 6
+
+
+async def test_empty_workout_prefill_stays_empty(session_manager):
+    session_manager.coordinator._workout_history = [
+        history_workout("2026-09-29T10:00:00Z", [{"weight_kg": 70, "reps": 10}])
+    ]
+    draft = await session_manager.start(
+        None, None, prefill_previous_weight=True, prefill_previous_reps=True
+    )
+    assert draft["exercises"] == []

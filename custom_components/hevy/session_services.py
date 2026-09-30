@@ -106,6 +106,8 @@ def register_session_services(hass: HomeAssistant) -> None:
                 call.data.get("routine_id"),
                 call.data.get("title"),
                 call.data["is_private"],
+                call.data["prefill_previous_weight"],
+                call.data["prefill_previous_reps"],
             )
         elif call.service == "update_workout":
             session = await current.update(
@@ -131,6 +133,8 @@ def register_session_services(hass: HomeAssistant) -> None:
             vol.Optional("routine_id"): TITLE,
             vol.Optional("title"): TITLE,
             vol.Optional("is_private", default=False): bool,
+            vol.Optional("prefill_previous_weight", default=False): bool,
+            vol.Optional("prefill_previous_reps", default=False): bool,
         },
         "update_workout": {
             **CURRENT,
