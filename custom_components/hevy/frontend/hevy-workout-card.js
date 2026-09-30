@@ -2,6 +2,9 @@ const escapeHTML = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => 
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const setTypes = ["normal", "warmup", "failure", "dropset"];
 const boardOptions = {
+  show_account_name: [true, "Show account name"],
+  prefill_previous_weight: [false, "Prefill previous exercise weight"],
+  prefill_previous_reps: [false, "Prefill previous exercise reps"],
   show_header: [true, "Show board header"],
   show_intro: [false, "Show intro text"],
   show_exercise_notes: [true, "Show exercise notes"],
@@ -437,7 +440,7 @@ class HevyWorkoutCard extends HTMLElement {
         this._renderError();
         return;
       }
-      void this._action("start_workout", { ...(routine ? { routine_id: routine } : {}), is_private: this._option("default_private_workout") });
+      void this._action("start_workout", { ...(routine ? { routine_id: routine } : {}), is_private: this._option("default_private_workout"), prefill_previous_weight: this._option("prefill_previous_weight"), prefill_previous_reps: this._option("prefill_previous_reps") });
     }
     else if (action === "add-exercise") {
       if (!this._option("show_add_exercise")) return;
@@ -513,7 +516,7 @@ class HevyWorkoutCard extends HTMLElement {
     }
     const unavailable = !showEmpty && !routines.length;
     const intro = this._option("show_intro") ? `<p class="muted picker-intro">${escapeHTML(this._config.intro_text || "Choose a routine.")}</p>` : "";
-    const success = this._draft?.status === "finished" ? `<p class="success" role="status">${escapeHTML(this._draft.title)} was sent to ${escapeHTML(this._accountTitle())}.</p>` : "";
+    const success = this._draft?.status === "finished" ? `<p class="success" role="status">${escapeHTML(this._draft.title)} was sent to ${this._option("show_account_name") ? escapeHTML(this._accountTitle()) : "Hevy"}.</p>` : "";
     return `${success}${intro}<div class="stack"><label>Routine<select data-action="routine" ${busy || (unavailable ? "disabled" : "")}>${showEmpty ? `<option value="" ${this._routineId === "" ? "selected" : ""}>Empty workout</option>` : ""}${unavailable ? '<option value="">No routines available</option>' : ""}${routines.map((routine) => `<option value="${escapeHTML(routine.id)}" ${routine.id === this._routineId ? "selected" : ""}>${escapeHTML(routine.title)}</option>`).join("")}</select></label>${unavailable ? '<p class="muted">Add a routine in Hevy, then reload its integration in Home Assistant. Or enable Empty workout in this card\'s settings.</p>' : ""}<button class="primary" data-action="start" ${busy || (unavailable ? "disabled" : "")}>${this._actionBusy ? "Starting..." : "Start workout"}</button></div>`;
   }
 
@@ -634,7 +637,7 @@ class HevyWorkoutCard extends HTMLElement {
     let extra = "";
     if (this._confirm === "finish") {
       title = "Finish this workout?";
-      text = `${this._count().completed} completed ${this._count().completed === 1 ? "set" : "sets"} will be sent to ${this._accountTitle()} as a ${this._draft.is_private ? "private" : "public"} workout. Unchecked sets will be left out.`;
+      text = `${this._count().completed} completed ${this._count().completed === 1 ? "set" : "sets"} will be sent to ${this._option("show_account_name") ? this._accountTitle() : "Hevy"} as a ${this._draft.is_private ? "private" : "public"} workout. Unchecked sets will be left out.`;
       action = "finish-confirm";
       label = "Finish and send to Hevy";
     } else if (this._confirm === "cancel") {
@@ -689,9 +692,9 @@ class HevyWorkoutCard extends HTMLElement {
       content = `${this._workoutFields(disabled)}${draft.exercises.length ? draft.exercises.map((exercise, index) => this._exercise(exercise, index, disabled)).join("") : `<p class="empty">${empty}</p>`}${picker}`;
       footer = `<div class="row spread"><span class="muted" data-count></span><span class="saved" data-save-status role="status" aria-live="polite"></span></div><div class="progress" aria-hidden="true"><span></span></div><div class="row actions"><button class="danger" data-action="cancel" ${busy}>Discard session</button><button class="primary" data-action="finish" ${busy}>Finish workout</button></div>`;
     }
-    const accountName = this._entry && this._board && accounts.length <= 1 ? `<p class="muted account-name">${escapeHTML(this._accountTitle())}</p>` : "";
+    const accountName = this._option("show_account_name") && this._entry && this._board && accounts.length <= 1 ? `<p class="muted account-name">${escapeHTML(this._accountTitle())}</p>` : "";
     const header = this._option("show_header") ? `<header><div><h1>${escapeHTML(this._config.title || "Workout")}</h1>${accountName}</div>${draft && draft.status !== "finished" ? `<span class="badge">${escapeHTML(({ active: "In progress", submitting: "Sending", uncertain: "Check Hevy" })[draft.status] || draft.status)}</span>` : ""}</header>` : accountName ? `<div class="account-identity">${accountName}</div>` : "";
-    this.shadowRoot.innerHTML = `<style>${styles}</style><ha-card class="${this._option("show_header") ? "" : "without-header"}">${header}<div data-errors></div>${accounts.length > 1 ? `<div class="account-picker"><label>Who is working out?<select data-action="account" ${busy}><option value="">Choose an account</option>${accounts.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === this._entry ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select></label></div>` : ""}${this._option("show_account_stats") && this._entry ? `<dl class="account-stats" data-account-stats aria-label="Stats for ${escapeHTML(this._accountTitle())}"></dl>` : ""}<main>${content}</main>${footer || this._confirm ? `<footer>${footer}${this._confirmation()}</footer>` : ""}</ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${styles}</style><ha-card class="${this._option("show_header") ? "" : "without-header"}">${header}<div data-errors></div>${accounts.length > 1 ? `<div class="account-picker"><label>Who is working out?<select data-action="account" ${busy}><option value="">Choose an account</option>${accounts.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === this._entry ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select></label></div>` : ""}${this._option("show_account_stats") && this._entry ? `<dl class="account-stats" data-account-stats aria-label="${this._option("show_account_name") ? `Stats for ${escapeHTML(this._accountTitle())}` : "Account stats"}"></dl>` : ""}<main>${content}</main>${footer || this._confirm ? `<footer>${footer}${this._confirmation()}</footer>` : ""}</ha-card>`;
     this._renderError();
     this._status();
     this._renderStats();
@@ -734,7 +737,7 @@ class HevyWorkoutCardEditor extends HTMLElement {
 
   _render() {
     const config = this._config;
-    this.shadowRoot.innerHTML = `<style>${styles}</style><div class="stack"><label>Board title<input data-config="title" value="${escapeHTML(config.title || "Workout")}"></label><label>Intro text<input data-config="intro_text" value="${escapeHTML(config.intro_text || "Choose a routine.")}"></label><label>Hevy account${this._accountList ? `<select data-config="config_entry_id"><option value="">Choose on the card</option>${this._accountList.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === config.config_entry_id ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select>` : `<input data-config="config_entry_id" value="${escapeHTML(config.config_entry_id || "")}" placeholder="Optional config entry ID">`}</label><label>Favorite routine IDs<input data-config="routine_ids" value="${escapeHTML((config.routine_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><label>Favorite exercise IDs<input data-config="exercise_ids" value="${escapeHTML((config.exercise_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><p class="hint">Favorites appear first in the pickers. Other routines and exercises remain available. Sessions are saved in Home Assistant for the selected account.</p><fieldset class="settings"><legend>Board display</legend><label>Workout title<select data-config="workout_title">${[["editable", "Editable input"], ["readonly", "Text only"], ["hidden", "Hidden"]].map(([value, label]) => `<option value="${value}" ${(config.workout_title || "editable") === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>${Object.entries(boardOptions).map(([key, [fallback, label]]) => `<label class="check"><input type="checkbox" data-config="${key}" ${(config[key] ?? fallback) ? "checked" : ""}>${label}</label>`).join("")}<p class="hint">The privacy default applies when starting a new workout. Saved sessions keep their privacy setting. Hidden values are preserved. Invalid edits stay visible until corrected or the saved session is loaded.</p></fieldset></div>`;
+    this.shadowRoot.innerHTML = `<style>${styles}</style><div class="stack"><label>Board title<input data-config="title" value="${escapeHTML(config.title || "Workout")}"></label><label>Intro text<input data-config="intro_text" value="${escapeHTML(config.intro_text || "Choose a routine.")}"></label><label>Hevy account${this._accountList ? `<select data-config="config_entry_id"><option value="">Choose on the card</option>${this._accountList.map((account) => `<option value="${escapeHTML(account.config_entry_id)}" ${account.config_entry_id === config.config_entry_id ? "selected" : ""}>${escapeHTML(account.title)}</option>`).join("")}</select>` : `<input data-config="config_entry_id" value="${escapeHTML(config.config_entry_id || "")}" placeholder="Optional config entry ID">`}</label><label>Favorite routine IDs<input data-config="routine_ids" value="${escapeHTML((config.routine_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><label>Favorite exercise IDs<input data-config="exercise_ids" value="${escapeHTML((config.exercise_ids || []).join(", "))}" placeholder="Comma-separated IDs"></label><p class="hint">Favorites appear first in the pickers. Other routines and exercises remain available. Sessions are saved in Home Assistant for the selected account.</p><fieldset class="settings"><legend>Board display</legend><label>Workout title<select data-config="workout_title">${[["editable", "Editable input"], ["readonly", "Text only"], ["hidden", "Hidden"]].map(([value, label]) => `<option value="${value}" ${(config.workout_title || "editable") === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>${Object.entries(boardOptions).map(([key, [fallback, label]]) => `<label class="check"><input type="checkbox" data-config="${key}" ${(config[key] ?? fallback) ? "checked" : ""}>${label}</label>`).join("")}<p class="hint">Previous weight and reps apply only when starting a routine. Saved sessions keep their measurements. The privacy default applies when starting a new workout. Saved sessions keep their privacy setting. Hidden values are preserved. Invalid edits stay visible until corrected or the saved session is loaded.</p></fieldset></div>`;
   }
 }
 

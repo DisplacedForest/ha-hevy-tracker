@@ -686,3 +686,86 @@ test("visual editor emits the new display options and title mode without changin
   assert.equal(config.show_empty_workout, false);
   assert.equal(config.workout_title, "readonly");
 });
+
+test("account visibility covers header, standalone label, stats, confirmation, and success", async (t) => {
+  for (const showHeader of [false, true]) {
+    const ctx = await setup(t);
+    ctx.card.setConfig({ config_entry_id: "one", show_header: showHeader, show_account_name: false, show_account_stats: true });
+    assert.equal(ctx.card.shadowRoot.querySelector(".account-name"), null);
+    assert.equal(ctx.card.shadowRoot.querySelector(".account-identity"), null);
+    assert.equal(ctx.card.shadowRoot.querySelector(".account-stats").getAttribute("aria-label"), "Account stats");
+    ctx.input("[data-field=completed]", true, "change");
+    await ctx.card._save();
+    ctx.click("finish");
+    assert.match(ctx.card.shadowRoot.querySelector(".finish-panel").textContent, /sent to Hevy as a private workout/);
+    assert.doesNotMatch(ctx.card.shadowRoot.innerHTML, /Zach/);
+    ctx.click("finish-confirm");
+    await tick();
+    await tick();
+    assert.match(ctx.card.shadowRoot.querySelector(".success").textContent, /sent to Hevy/);
+    assert.doesNotMatch(ctx.card.shadowRoot.innerHTML, /Zach/);
+    ctx.card.setConfig({ config_entry_id: "one", show_header: showHeader, show_account_stats: true });
+    assert.equal(ctx.card.shadowRoot.querySelector(".account-name").textContent, "Zach");
+    assert.equal(ctx.card.shadowRoot.querySelector(".account-stats").getAttribute("aria-label"), "Stats for Zach");
+    assert.match(ctx.card.shadowRoot.querySelector(".success").textContent, /sent to Zach/);
+  }
+});
+
+test("hiding account name retains multiaccount selection and selected destination", async (t) => {
+  const initial = board(null);
+  initial.accounts.push({ config_entry_id: "two", title: "Sam" });
+  const ctx = await setup(t, initial, async (request, state) => {
+    if (request.service === "get_workout_board") {
+      state.config_entry_id = request.service_data.config_entry_id;
+    }
+  });
+  ctx.card.setConfig({ config_entry_id: "one", show_account_name: false });
+  assert.equal(ctx.card.shadowRoot.querySelectorAll("[data-action=account] option").length, 3);
+  ctx.input("[data-action=account]", "two", "change");
+  await tick();
+  ctx.click("start");
+  await tick();
+  assert.equal(ctx.calls.find((call) => call.service === "start_workout").service_data.config_entry_id, "two");
+  assert.equal(ctx.card.shadowRoot.querySelector("[data-action=account] option:checked").textContent, "Sam");
+});
+
+test("prefill flags are independent, default off, and only sent at start", async (t) => {
+  for (const options of [{}, { prefill_previous_weight: true }, { prefill_previous_reps: true }, { prefill_previous_weight: true, prefill_previous_reps: true }]) {
+    const ctx = await setup(t, board(null));
+    ctx.card.setConfig({ config_entry_id: "one", ...options });
+    ctx.click("start");
+    await tick();
+    const data = ctx.calls.find((call) => call.service === "start_workout").service_data;
+    assert.equal(data.prefill_previous_weight, options.prefill_previous_weight ?? false);
+    assert.equal(data.prefill_previous_reps, options.prefill_previous_reps ?? false);
+    const saved = clone(ctx.card._draft);
+    ctx.card.setConfig({ config_entry_id: "one", prefill_previous_weight: !data.prefill_previous_weight, prefill_previous_reps: !data.prefill_previous_reps });
+    assert.deepEqual(clone(ctx.card._draft), saved);
+    assert.equal(ctx.calls.filter((call) => call.service === "start_workout").length, 1);
+    ctx.input("[data-field=weight]", 75);
+    await ctx.card._save();
+    const update = ctx.calls.find((call) => call.service === "update_workout").service_data;
+    assert.equal(update.prefill_previous_weight, undefined);
+    assert.equal(update.prefill_previous_reps, undefined);
+  }
+});
+
+test("new visual editor toggles use boolean defaults and validate configuration", async (t) => {
+  const { card, dom } = await setup(t);
+  const editor = dom.window.document.createElement("hevy-workout-card-editor");
+  editor.setConfig({ config_entry_id: "one" });
+  let config;
+  editor.addEventListener("config-changed", (event) => { config = event.detail.config; });
+  for (const [key, fallback] of [["show_account_name", true], ["prefill_previous_weight", false], ["prefill_previous_reps", false]]) {
+    const field = editor.shadowRoot.querySelector(`[data-config=${key}]`);
+    assert.equal(field.checked, fallback);
+    field.checked = !fallback;
+    field.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    assert.equal(config[key], !fallback);
+    assert.equal(config.config_entry_id, "one");
+    assert.throws(() => card.setConfig({ [key]: "false" }), /must be true or false/);
+  }
+  assert.equal(config.show_account_name, false);
+  assert.equal(config.prefill_previous_weight, true);
+  assert.equal(config.prefill_previous_reps, true);
+});

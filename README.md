@@ -116,7 +116,7 @@ Open the card's visual editor to choose which controls appear. Every setting bel
 | Setting | Default | What it does |
 |---------|---------|--------------|
 | `title` | `Workout` | Sets the board heading. |
-| `show_header` | `true` | Shows the board heading and session badge. The account label or picker stays visible when the header is hidden. |
+| `show_header` | `true` | Shows the board heading and session badge. The account label follows `show_account_name`; the picker stays available when the header is hidden. |
 | `show_intro` | `false` | Shows a short intro above the routine picker. |
 | `intro_text` | `Choose a routine.` | Sets the intro text when `show_intro` is enabled. |
 | `workout_title` | `editable` | Use `editable` for an input, `readonly` for plain text, or `hidden` to hide the session title. |
@@ -129,6 +129,9 @@ Open the card's visual editor to choose which controls appear. Every setting bel
 | `show_private_workout` | `true` | Shows the Private workout checkbox. |
 | `default_private_workout` | `false` | Makes new sessions public or private. Applies once when starting a workout. |
 | `collapse_completed_sets` | `false` | Collapses checked sets into a measurement summary. Choose Show details to edit, or uncheck a set to undo completion. |
+| `show_account_name` | `true` | Shows the account label, finish destination, success destination, and named stats label. The multiaccount picker remains available when hidden. |
+| `prefill_previous_weight` | `false` | Uses the previous weight for each exercise when starting a routine. |
+| `prefill_previous_reps` | `false` | Uses the previous reps for each exercise when starting a routine. |
 | `show_account_stats` | `false` | Shows total workouts, the last 7 days' workout count, and streak for the selected account. |
 
 For a compact board with private workouts and account stats:
@@ -149,7 +152,11 @@ collapse_completed_sets: true
 show_account_stats: true
 ```
 
-Display settings belong to each card. Saved sessions keep their title, notes, privacy, set types, RPE, and completed sets when opened from another card with different display settings. Hiding a control does not erase its value. Invalid edits stay visible until corrected or the saved session is loaded. Hidden titles still use the routine title, or "Workout" for an empty workout. The finish confirmation always shows the account and actual workout privacy before sending.
+Display settings belong to each card. Saved sessions keep their title, notes, privacy, set types, RPE, and completed sets when opened from another card with different display settings. Hiding a control does not erase its value. Invalid edits stay visible until corrected or the saved session is loaded. Hidden titles still use the routine title, or "Workout" for an empty workout. The finish confirmation shows the actual workout privacy before sending. With `show_account_name: false`, the account label is hidden and the confirmation and success message use "Hevy". The multiaccount picker still shows account names so you can choose the workout destination.
+
+Enable `prefill_previous_weight` and `prefill_previous_reps` independently to start a routine with measurements from the selected account's latest cached occurrence of each exercise, including occurrences in other routines. History overrides routine defaults for each enabled measurement. Sets match by their position within the same set type, so a warmup does not shift normal sets. Extra sets and missing or invalid measurements keep their routine defaults. Set count, set types, notes, and other measurements stay as defined by the routine, and all sets start unchecked.
+
+Prefill uses the integration's existing cache of up to 30 days and 100 workouts without extra API requests. Exercises absent from that cache keep their routine values. Empty workouts and saved sessions are unaffected, including when opened from a card with different prefill settings.
 
 Routines load when the Hevy integration starts. After adding or changing a routine in Hevy, reload that integration in Home Assistant to update the picker.
 

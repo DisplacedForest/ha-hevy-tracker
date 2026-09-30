@@ -142,6 +142,18 @@ start_workout:
       default: false
       selector:
         boolean: null
+    prefill_previous_weight:
+      name: Prefill previous exercise weight
+      description: Uses the latest cached occurrence of each exercise when starting a routine.
+      default: false
+      selector:
+        boolean: null
+    prefill_previous_reps:
+      name: Prefill previous exercise reps
+      description: Uses the latest cached occurrence of each exercise when starting a routine.
+      default: false
+      selector:
+        boolean: null
 update_workout:
   name: Update workout
   description: Saves the full workout draft. Stale revisions are rejected to protect
