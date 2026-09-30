@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-30
+
+Start routines with your previous exercise measurements and choose whether to show your account name.
+
+- Add `show_account_name` to hide the single-account label and account name in finish confirmations, success messages, and stats accessibility labels. The multiaccount picker remains available.
+- Add independent `prefill_previous_weight` and `prefill_previous_reps` settings. Each uses the selected account's most recent cached occurrence of an exercise, including workouts from other routines, and overrides routine defaults for that measurement.
+- Match previous sets by position within the same set type. Missing or invalid history measurements and extra routine sets keep routine defaults. New sets start unchecked and saved sessions keep their measurements.
+- Use the existing cache of up to 30 days and 100 workouts without extra API requests. Both prefill settings default to false; account names remain visible by default.
 - Remove the redundant Home Assistant aiohttp dependency declaration to pass current Hassfest validation.
 
-- Add independent board settings to hide the account name and prefill routine weights or reps from the selected account's recent workout history. Saved sessions keep their measurements and the multiaccount picker remains available.
+After updating through HACS and restarting Home Assistant, change the dashboard resource URL to `/hevy/hevy-workout-card.js?version=1.6.0` and reload the browser. Enable the new settings in the card's visual editor or [board configuration](https://github.com/DisplacedForest/ha-hevy-tracker#customize-your-workout-board).
 
 ## [1.5.1] - 2026-09-09
 
@@ -272,7 +280,8 @@ Requires Home Assistant 2024.7 or later and Hevy Pro. After updating, add `/hevy
 - Configurable update intervals to manage API usage
 
 
-[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.3.0...v1.4.0

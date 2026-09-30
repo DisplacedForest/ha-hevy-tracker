@@ -78,10 +78,10 @@ The bundled live workout card and native calendar card work alongside your exist
 
 ### Live workout card
 
-The card is included with the integration and requires Home Assistant 2024.7 or later. After installing or updating to 1.5.1 and restarting Home Assistant:
+The card is included with the integration and requires Home Assistant 2024.7 or later. After installing or updating to 1.6.0 and restarting Home Assistant:
 
 1. Enable **Advanced mode** in your Home Assistant profile if Resources is hidden.
-2. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.5.1` with resource type **JavaScript Module**.
+2. Open **Settings → Dashboards → Resources** and add `/hevy/hevy-workout-card.js?version=1.6.0` with resource type **JavaScript Module**.
 3. Add a manual card to your dashboard:
 
 ```yaml
