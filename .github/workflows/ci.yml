@@ -15,7 +15,7 @@ jobs:
     name: Lint
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
       - run: mise run setup
       - run: mise run fmt
       - run: mise run lint
@@ -26,7 +26,7 @@ jobs:
     name: Test
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
       - run: mise run setup
       - run: mise run test
       - run: mise run build
