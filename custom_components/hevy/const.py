@@ -37,6 +37,29 @@ SENSOR_MUSCLE_GROUP_SUMMARY = "muscle_group_summary"
 SENSOR_WEEKLY_MUSCLE_VOLUME = "weekly_muscle_volume"
 SENSOR_WEEKLY_DISTANCE = "weekly_distance"
 SENSOR_NEXT_WORKOUT = "next_workout"
+SENSOR_LAST_BODY_MEASUREMENT = "last_body_measurement"
+
+BODY_MEASUREMENT_FIELDS: dict[str, tuple[str, str, str]] = {
+    "weight_kg": ("body_weight", "Body weight", "weight"),
+    "lean_mass_kg": ("lean_body_mass", "Lean body mass", "weight"),
+    "fat_percent": ("body_fat", "Body fat", "percent"),
+    "neck_cm": ("neck", "Neck", "length"),
+    "shoulder_cm": ("shoulder", "Shoulder", "length"),
+    "chest_cm": ("chest", "Chest", "length"),
+    "left_bicep_cm": ("left_bicep", "Left bicep", "length"),
+    "right_bicep_cm": ("right_bicep", "Right bicep", "length"),
+    "left_forearm_cm": ("left_forearm", "Left forearm", "length"),
+    "right_forearm_cm": ("right_forearm", "Right forearm", "length"),
+    "abdomen": ("abdomen", "Abdomen", "length"),
+    "waist": ("waist", "Waist", "length"),
+    "hips": ("hips", "Hips", "length"),
+    "left_thigh": ("left_thigh", "Left thigh", "length"),
+    "right_thigh": ("right_thigh", "Right thigh", "length"),
+    "left_calf": ("left_calf", "Left calf", "length"),
+    "right_calf": ("right_calf", "Right calf", "length"),
+}
+MAX_BODY_MEASUREMENT_PAGES = 5
+BODY_MEASUREMENT_HISTORY = 30
 
 MUSCLE_DUE_THRESHOLD_DAYS = 3
 MAX_WORKOUT_PAGES = 10  # Safety cap for pagination

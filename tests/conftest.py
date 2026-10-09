@@ -80,6 +80,9 @@ def mock_client() -> MagicMock:
         return_value={"exercise_templates": [], "page_count": 1}
     )
     client.get_routines = AsyncMock(return_value=ROUTINES_RESPONSE)
+    client.get_body_measurements = AsyncMock(
+        return_value={"body_measurements": [], "page_count": 1}
+    )
     return client
 
 

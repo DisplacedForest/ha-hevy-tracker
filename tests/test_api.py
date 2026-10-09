@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import aiohttp
 import pytest
 
-from custom_components.hevy.api import HevyApiClient, HevyApiError
+from custom_components.hevy.api import HevyApiClient, HevyApiError, HevyNotFoundError
 
 
 async def test_http_errors_do_not_expose_upstream_body(caplog):
@@ -44,3 +44,22 @@ async def test_user_info_uses_authenticated_account_endpoint():
     assert args[0] == "GET"
     assert args[1].endswith("/v1/user/info")
     assert kwargs["headers"] == {"api-key": "fixture-key"}
+
+
+async def test_body_measurements_request_and_404():
+    response = MagicMock(status=200)
+    response.json = AsyncMock(return_value={"body_measurements": [], "page_count": 1})
+    request = MagicMock()
+    request.__aenter__ = AsyncMock(return_value=response)
+    session = MagicMock()
+    session.request.return_value = request
+    client = HevyApiClient("fixture-key", session)
+    await client.get_body_measurements(page=2)
+    args, kwargs = session.request.call_args
+    assert args[0] == "GET"
+    assert args[1].endswith("/v1/body_measurements")
+    assert kwargs["params"] == {"page": 2, "pageSize": 10}
+
+    response.status = 404
+    with pytest.raises(HevyNotFoundError):
+        await client.get_body_measurements()

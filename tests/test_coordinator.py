@@ -4,6 +4,8 @@ from datetime import timedelta
 
 from homeassistant.util import dt as dt_util
 
+from custom_components.hevy.api import HevyApiError, HevyNotFoundError
+
 
 def _iso(dt) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -339,3 +341,61 @@ class TestDetectNextWorkout:
         result = imperial_coordinator._detect_next_workout()
         assert result["routine_id"] == "r2"
         assert result["exercises_preview"] == ["Hip Openers"]
+
+
+class TestBodyMeasurements:
+    async def test_fetch_paginates_and_sorts_newest_first(
+        self, metric_coordinator, mock_client
+    ) -> None:
+        mock_client.get_body_measurements.side_effect = [
+            {"body_measurements": [{"date": "2026-02-01"}], "page_count": 2},
+            {"body_measurements": [{"date": "2026-03-02"}], "page_count": 2},
+        ]
+        result = await metric_coordinator._fetch_body_measurements()
+        assert [e["date"] for e in result] == ["2026-03-02", "2026-02-01"]
+        assert mock_client.get_body_measurements.call_count == 2
+
+    async def test_fetch_treats_404_as_empty(
+        self, metric_coordinator, mock_client
+    ) -> None:
+        mock_client.get_body_measurements.side_effect = HevyNotFoundError("404")
+        assert await metric_coordinator._fetch_body_measurements() == []
+
+    async def test_summary_keeps_last_logged_value_per_field(
+        self, metric_coordinator
+    ) -> None:
+        summary = metric_coordinator._summarize_body_measurements(
+            [
+                {"date": "2026-03-09", "weight_kg": 78.5, "waist": None},
+                {"date": "2026-03-02", "weight_kg": 80.0, "waist": 81},
+            ]
+        )
+        assert summary["latest_date"] == "2026-03-09"
+        assert summary["values"]["weight_kg"]["change"] == -1.5
+        assert summary["values"]["waist"] == {
+            "value": 81,
+            "date": "2026-03-02",
+            "previous_value": None,
+            "previous_date": None,
+            "change": None,
+        }
+        assert "neck_cm" not in summary["values"]
+
+    async def test_summary_empty(self, metric_coordinator) -> None:
+        assert metric_coordinator._summarize_body_measurements([]) == {
+            "latest_date": None,
+            "values": {},
+            "history": [],
+        }
+
+    async def test_failure_keeps_workout_update_and_last_values(
+        self, metric_coordinator, mock_client
+    ) -> None:
+        mock_client.get_body_measurements.return_value = {
+            "body_measurements": [{"date": "2026-03-02", "weight_kg": 80.0}],
+            "page_count": 1,
+        }
+        await metric_coordinator._async_update_data()
+        mock_client.get_body_measurements.side_effect = HevyApiError("HTTP 500")
+        data = await metric_coordinator._async_update_data()
+        assert data["body_measurements"]["values"]["weight_kg"]["value"] == 80.0

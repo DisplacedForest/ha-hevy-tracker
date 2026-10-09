@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Body measurements from Hevy's *Log Measurements* screen as sensors.
+
+- Add a sensor per logged body measurement (body weight, lean body mass, body fat, neck, shoulder, chest, biceps, forearms, abdomen, waist, hips, thighs, calves) with `measured_on`, `previous_value` and `change` attributes. Sensors appear for fields you have logged at least once.
+- Values are stored in kg / cm and shown in lb / in for the imperial unit system. They have a `state_class`, so long-term statistics work.
+- Add `sensor.hevy_last_body_measurement` with the date of the newest entry and the last 30 entries as a `history` attribute.
+- A failed body measurement request keeps the last known values and never fails the workout update.
+
 ## [1.6.0] - 2026-09-30
 
 Start routines with your previous exercise measurements and choose whether to show your account name.
