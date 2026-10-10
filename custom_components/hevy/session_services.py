@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
 
@@ -14,6 +13,11 @@ from .workout_session import (
     routine_exercises,
     whole_number,
 )
+
+if TYPE_CHECKING:
+    import probatio as vol
+else:
+    import voluptuous as vol
 
 SESSION_SERVICES = (
     "get_workout_board",

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep validation schema types compatible with Home Assistant 2026.10 while retaining legacy runtime imports. Update the test harness to stable 0.13.371.
+
 ## [1.6.0] - 2026-09-30
 
 Start routines with your previous exercise measurements and choose whether to show your account name.
