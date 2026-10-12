@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from unittest.mock import AsyncMock
 
+from conftest import body_day, paged_body_measurements
 from homeassistant.util import dt as dt_util
 
 from custom_components.hevy.api import HevyApiError, HevyNotFoundError
@@ -343,23 +345,72 @@ class TestDetectNextWorkout:
         assert result["exercises_preview"] == ["Hip Openers"]
 
 
+def _weights(count: int, first: int = 0, weight: float = 80.0) -> list[dict]:
+    return [
+        {"date": body_day(first + offset), "weight_kg": weight}
+        for offset in range(count)
+    ]
+
+
 class TestBodyMeasurements:
-    async def test_fetch_paginates_and_sorts_newest_first(
+    async def test_first_update_reads_every_page(
         self, metric_coordinator, mock_client
     ) -> None:
-        mock_client.get_body_measurements.side_effect = [
-            {"body_measurements": [{"date": "2026-02-01"}], "page_count": 2},
-            {"body_measurements": [{"date": "2026-03-02"}], "page_count": 2},
-        ]
-        result = await metric_coordinator._fetch_body_measurements()
-        assert [e["date"] for e in result] == ["2026-03-02", "2026-02-01"]
-        assert mock_client.get_body_measurements.call_count == 2
+        entries = [*_weights(50), {"date": body_day(50), "waist": 81}]
+        mock_client.get_body_measurements = AsyncMock(
+            side_effect=paged_body_measurements(entries)
+        )
+        await metric_coordinator._update_body_measurements()
+        assert mock_client.get_body_measurements.call_count == 6
+        assert metric_coordinator._body_measurements[body_day(50)]["waist"] == 81
 
     async def test_fetch_treats_404_as_empty(
         self, metric_coordinator, mock_client
     ) -> None:
         mock_client.get_body_measurements.side_effect = HevyNotFoundError("404")
-        assert await metric_coordinator._fetch_body_measurements() == []
+        await metric_coordinator._update_body_measurements()
+        assert metric_coordinator._body_measurements == {}
+
+    async def test_regular_update_reads_newest_pages_and_keeps_older_entries(
+        self, metric_coordinator, mock_client
+    ) -> None:
+        older = [{"date": body_day(60), "waist": 81}, *_weights(5, first=61)]
+        mock_client.get_body_measurements = AsyncMock(
+            side_effect=paged_body_measurements([*_weights(55), *older])
+        )
+        await metric_coordinator._update_body_measurements()
+
+        newest = [*_weights(1, weight=79.0), *_weights(53, first=2)]
+        mock_client.get_body_measurements = AsyncMock(
+            side_effect=paged_body_measurements([*newest, *older])
+        )
+        await metric_coordinator._update_body_measurements()
+
+        stored = metric_coordinator._body_measurements
+        assert mock_client.get_body_measurements.call_count == 5
+        assert stored[body_day(0)]["weight_kg"] == 79.0
+        assert body_day(1) not in stored
+        assert stored[body_day(60)]["waist"] == 81
+
+    async def test_daily_full_sync_drops_deleted_older_entries(
+        self, metric_coordinator, mock_client, freezer
+    ) -> None:
+        older = [{"date": body_day(60), "waist": 81}]
+        mock_client.get_body_measurements = AsyncMock(
+            side_effect=paged_body_measurements([*_weights(55), *older])
+        )
+        await metric_coordinator._update_body_measurements()
+        mock_client.get_body_measurements = AsyncMock(
+            side_effect=paged_body_measurements(_weights(55))
+        )
+
+        await metric_coordinator._update_body_measurements()
+        assert body_day(60) in metric_coordinator._body_measurements
+
+        freezer.tick(timedelta(hours=24))
+        await metric_coordinator._update_body_measurements()
+        assert body_day(60) not in metric_coordinator._body_measurements
+        assert mock_client.get_body_measurements.call_count == 11
 
     async def test_summary_keeps_last_logged_value_per_field(
         self, metric_coordinator

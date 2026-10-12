@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
+from conftest import body_day, paged_body_measurements
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -43,7 +46,14 @@ BODY_MEASUREMENTS = {
 }
 
 
-def _patch_api(body_measurements: dict | None = None):
+def _patch_api(body_measurements: dict | Callable[..., Any] | None = None):
+    get_body_measurements = (
+        AsyncMock(side_effect=body_measurements)
+        if callable(body_measurements)
+        else AsyncMock(
+            return_value=body_measurements or {"body_measurements": [], "page_count": 1}
+        )
+    )
     return patch.multiple(
         HevyApiClient,
         get_user_info=AsyncMock(return_value={"data": {"name": "Test account"}}),
@@ -78,9 +88,7 @@ def _patch_api(body_measurements: dict | None = None):
                 ]
             }
         ),
-        get_body_measurements=AsyncMock(
-            return_value=body_measurements or {"body_measurements": [], "page_count": 1}
-        ),
+        get_body_measurements=get_body_measurements,
     )
 
 
@@ -215,3 +223,71 @@ async def test_body_measurement_sensor_added_when_field_first_logged(hass) -> No
     )
     assert float(neck.state) == 36
     assert neck.attributes["measured_on"] == "2026-03-16"
+
+
+def _weights(count: int, first: int = 0) -> list[dict]:
+    return [
+        {"date": body_day(first + offset), "weight_kg": 80.0} for offset in range(count)
+    ]
+
+
+async def _setup_metric(hass, body_measurements) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_API_KEY: "test_key"},
+        options={CONF_UNIT_SYSTEM: UNIT_SYSTEM_METRIC},
+    )
+    entry.add_to_hass(hass)
+    with _patch_api(body_measurements):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    return entry
+
+
+def _waist(hass):
+    return next(
+        (s for s in hass.states.async_all("sensor") if s.entity_id.endswith("_waist")),
+        None,
+    )
+
+
+async def test_body_measurement_older_than_first_50_entries_on_fresh_setup(
+    hass,
+) -> None:
+    waists = [
+        {"date": body_day(50), "waist": 81},
+        {"date": body_day(60), "waist": 83},
+    ]
+    await _setup_metric(hass, paged_body_measurements([*_weights(50), *waists]))
+
+    waist = _waist(hass)
+    assert waist is not None
+    assert float(waist.state) == 81
+    assert waist.attributes["measured_on"] == body_day(50)
+    assert waist.attributes["previous_value"] == 83
+    assert waist.attributes["previous_measured_on"] == body_day(60)
+    assert waist.attributes["change"] == -2
+
+
+async def test_body_measurement_kept_after_leaving_first_50_entries(hass) -> None:
+    waists = [
+        {"date": body_day(50), "waist": 81},
+        {"date": body_day(60), "waist": 83},
+    ]
+    entry = await _setup_metric(hass, paged_body_measurements([*_weights(5), *waists]))
+
+    newer = [{"date": body_day(-offset), "weight_kg": 79.0} for offset in range(1, 51)]
+    pages = AsyncMock(
+        side_effect=paged_body_measurements([*newer, *_weights(5), *waists])
+    )
+    with _patch_api(), patch.object(HevyApiClient, "get_body_measurements", pages):
+        await hass.data[DOMAIN][entry.entry_id].async_refresh()
+        await hass.async_block_till_done()
+
+    assert pages.call_count == 5
+    waist = _waist(hass)
+    assert waist is not None
+    assert waist.state != "unavailable"
+    assert float(waist.state) == 81
+    assert waist.attributes["previous_value"] == 83
+    assert waist.attributes["change"] == -2

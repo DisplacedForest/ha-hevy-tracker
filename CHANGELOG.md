@@ -14,6 +14,7 @@ Body measurements from Hevy's *Log Measurements* screen as sensors.
 - Add a sensor per logged body measurement (body weight, lean body mass, body fat, neck, shoulder, chest, biceps, forearms, abdomen, waist, hips, thighs, calves) with `measured_on`, `previous_value` and `change` attributes. Sensors appear for fields you have logged at least once.
 - Values are stored in kg / cm and shown in lb / in for the imperial unit system. They have a `state_class`, so long-term statistics work.
 - Add `sensor.hevy_last_body_measurement` with the date of the newest entry and the last 30 entries as a `history` attribute.
+- Measurements you log less often, such as waist, keep their sensor, previous value and change. All entries are read at setup and once a day, so edited and deleted entries are picked up; regular updates read the newest 50 entries.
 - A failed body measurement request keeps the last known values and never fails the workout update.
 
 ### Fixed

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from collections.abc import Callable, Coroutine
+from datetime import date, timedelta
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.hevy.api import HevyNotFoundError
 from custom_components.hevy.const import UNIT_SYSTEM_IMPERIAL, UNIT_SYSTEM_METRIC
 from custom_components.hevy.coordinator import HevyDataUpdateCoordinator
 
@@ -62,6 +65,26 @@ ROUTINES_RESPONSE = {
         },
     ]
 }
+
+
+def body_day(days_ago: int) -> str:
+    return (date(2026, 3, 31) - timedelta(days=days_ago)).isoformat()
+
+
+def paged_body_measurements(
+    entries: list[dict[str, Any]],
+) -> Callable[..., Coroutine[Any, Any, dict[str, Any]]]:
+    async def get_body_measurements(page: int = 1, page_size: int = 10) -> dict:
+        chunk = entries[(page - 1) * page_size : page * page_size]
+        if not chunk:
+            raise HevyNotFoundError("Hevy returned HTTP 404")
+        return {
+            "page": page,
+            "page_count": -(-len(entries) // page_size),
+            "body_measurements": chunk,
+        }
+
+    return get_body_measurements
 
 
 @pytest.fixture(autouse=True)

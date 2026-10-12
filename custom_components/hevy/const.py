@@ -59,6 +59,8 @@ BODY_MEASUREMENT_FIELDS: dict[str, tuple[str, str, str]] = {
     "right_calf": ("right_calf", "Right calf", "length"),
 }
 MAX_BODY_MEASUREMENT_PAGES = 5
+MAX_BODY_MEASUREMENT_SYNC_PAGES = 200
+BODY_MEASUREMENT_SYNC_HOURS = 24
 BODY_MEASUREMENT_HISTORY = 30
 
 MUSCLE_DUE_THRESHOLD_DAYS = 3
