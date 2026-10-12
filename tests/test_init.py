@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 from conftest import body_day, paged_body_measurements
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -291,3 +292,65 @@ async def test_body_measurement_kept_after_leaving_first_50_entries(hass) -> Non
     assert float(waist.state) == 81
     assert waist.attributes["previous_value"] == 83
     assert waist.attributes["change"] == -2
+
+
+async def _switch_unit_system(hass, entry, unit_system: str) -> None:
+    with _patch_api(BODY_MEASUREMENTS):
+        hass.config_entries.async_update_entry(
+            entry, options={CONF_UNIT_SYSTEM: unit_system}
+        )
+        await hass.async_block_till_done()
+
+
+def _body_state(hass, suffix: str):
+    return next(
+        s for s in hass.states.async_all("sensor") if s.entity_id.endswith(suffix)
+    )
+
+
+async def test_switching_unit_system_updates_existing_body_sensors(hass) -> None:
+    entry = await _setup_metric(hass, BODY_MEASUREMENTS)
+    assert _body_state(hass, "_waist").attributes["unit_of_measurement"] == "cm"
+
+    await _switch_unit_system(hass, entry, UNIT_SYSTEM_IMPERIAL)
+    waist = _body_state(hass, "_waist")
+    weight = _body_state(hass, "_body_weight")
+    assert waist.attributes["unit_of_measurement"] == "in"
+    assert round(float(waist.state), 1) == 31.9
+    assert weight.attributes["unit_of_measurement"] == "lb"
+    assert round(float(weight.state), 1) == 173.1
+    assert weight.attributes["previous_value"] == 176.37
+    assert weight.attributes["change"] == -3.31
+
+    await _switch_unit_system(hass, entry, UNIT_SYSTEM_METRIC)
+    waist = _body_state(hass, "_waist")
+    weight = _body_state(hass, "_body_weight")
+    assert waist.attributes["unit_of_measurement"] == "cm"
+    assert float(waist.state) == 81
+    assert weight.attributes["unit_of_measurement"] == "kg"
+    assert float(weight.state) == 78.5
+    assert weight.attributes["previous_value"] == 80.0
+    assert weight.attributes["change"] == -1.5
+
+
+async def test_explicit_body_sensor_unit_survives_unit_system_switch(hass) -> None:
+    entry = await _setup_metric(hass, BODY_MEASUREMENTS)
+    registry = er.async_get(hass)
+    for suffix, unit in (("_body_weight", "g"), ("_waist", "mm")):
+        registry.async_update_entity_options(
+            _body_state(hass, suffix).entity_id,
+            "sensor",
+            {"unit_of_measurement": unit},
+        )
+    await hass.async_block_till_done()
+
+    for unit_system in (UNIT_SYSTEM_IMPERIAL, UNIT_SYSTEM_METRIC, UNIT_SYSTEM_IMPERIAL):
+        await _switch_unit_system(hass, entry, unit_system)
+        weight = _body_state(hass, "_body_weight")
+        waist = _body_state(hass, "_waist")
+        assert weight.attributes["unit_of_measurement"] == "g"
+        assert float(weight.state) == 78500
+        assert weight.attributes["previous_value"] == 80000
+        assert weight.attributes["change"] == -1500
+        assert waist.attributes["unit_of_measurement"] == "mm"
+        assert float(waist.state) == 810

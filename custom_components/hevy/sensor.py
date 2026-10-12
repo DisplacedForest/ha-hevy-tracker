@@ -14,8 +14,9 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfLength, UnitOfMass
+from homeassistant.const import PERCENTAGE, Platform, UnitOfLength, UnitOfMass
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -87,6 +88,7 @@ async def async_setup_entry(
             if field in logged and field not in known
         ]
         known.update(sensor.field for sensor in new)
+        _refresh_suggested_units(hass, new)
         return new
 
     entities.extend(_new_body_measurement_sensors())
@@ -136,6 +138,30 @@ async def async_setup_entry(
     entry.async_on_unload(
         coordinator.async_add_listener(_add_new_body_measurement_sensors)
     )
+
+
+def _refresh_suggested_units(
+    hass: HomeAssistant, sensors: list[HevyBodyMeasurementSensor]
+) -> None:
+    registry = er.async_get(hass)
+    private_key = f"{Platform.SENSOR}.private"
+    for sensor in sensors:
+        suggested = sensor.suggested_unit_of_measurement
+        if suggested is None or sensor.unique_id is None:
+            continue
+        entity_id = registry.async_get_entity_id(
+            Platform.SENSOR, DOMAIN, sensor.unique_id
+        )
+        registry_entry = registry.async_get(entity_id) if entity_id else None
+        if registry_entry is None:
+            continue
+        private = dict(registry_entry.options.get(private_key) or {})
+        if private.get("suggested_unit_of_measurement") == suggested:
+            continue
+        private["refresh_initial_entity_options"] = True
+        registry.async_update_entity_options(
+            registry_entry.entity_id, private_key, private
+        )
 
 
 def get_device_info(entry: ConfigEntry) -> DeviceInfo:
