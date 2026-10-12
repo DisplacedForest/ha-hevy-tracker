@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
@@ -25,6 +24,11 @@ from .const import (
     UNIT_SYSTEM_METRIC,
 )
 from .coordinator import HevyDataUpdateCoordinator
+
+if TYPE_CHECKING:
+    import probatio as vol
+else:
+    import voluptuous as vol
 
 _LOGGER = logging.getLogger(__name__)
 
