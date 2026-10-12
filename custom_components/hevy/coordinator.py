@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -10,10 +11,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import HevyApiClient, HevyApiError
+from .api import HevyApiClient, HevyApiError, HevyNotFoundError
 from .const import (
+    BODY_MEASUREMENT_FIELDS,
+    BODY_MEASUREMENT_HISTORY,
+    BODY_MEASUREMENT_SYNC_HOURS,
     DOMAIN,
     KG_TO_LBS,
+    MAX_BODY_MEASUREMENT_PAGES,
+    MAX_BODY_MEASUREMENT_SYNC_PAGES,
     MAX_WORKOUT_PAGES,
     METERS_TO_KM,
     METERS_TO_MILES,
@@ -60,6 +66,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._exercise_distance_prs: dict[str, dict[str, Any]] = {}
         self._exercise_templates: dict[str, dict] = {}  # Cache templates by ID
         self._routines: list[dict[str, Any]] = []
+        self._body_measurements: dict[str, dict[str, Any]] = {}
+        self._body_measurements_synced: datetime | None = None
         self.workout_session: WorkoutSession | None = None
         self.account_name: str | None = None
 
@@ -790,6 +798,73 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return streak
 
+    async def _fetch_body_measurement_pages(
+        self, max_pages: int
+    ) -> tuple[dict[str, dict[str, Any]], bool]:
+        entries: dict[str, dict[str, Any]] = {}
+        for page in range(1, max_pages + 1):
+            try:
+                data = await self.client.get_body_measurements(page=page, page_size=10)
+            except HevyNotFoundError:
+                return entries, True
+            for entry in data.get("body_measurements") or []:
+                if entry.get("date"):
+                    entries[entry["date"]] = entry
+            if page >= (data.get("page_count") or 1):
+                return entries, True
+        return entries, False
+
+    async def _update_body_measurements(self) -> None:
+        now = dt_util.utcnow()
+        full_sync = (
+            self._body_measurements_synced is None
+            or now - self._body_measurements_synced
+            >= timedelta(hours=BODY_MEASUREMENT_SYNC_HOURS)
+        )
+        entries, complete = await self._fetch_body_measurement_pages(
+            MAX_BODY_MEASUREMENT_SYNC_PAGES if full_sync else MAX_BODY_MEASUREMENT_PAGES
+        )
+        if complete:
+            self._body_measurements = entries
+        elif entries:
+            first, last = min(entries), max(entries)
+            retained = {
+                day: entry
+                for day, entry in self._body_measurements.items()
+                if day < first or day > last
+            }
+            self._body_measurements = {**retained, **entries}
+        if full_sync:
+            self._body_measurements_synced = now
+
+    @staticmethod
+    def _summarize_body_measurements(
+        entries: Iterable[dict[str, Any]],
+    ) -> dict[str, Any]:
+        entries = sorted(entries, key=lambda entry: entry["date"], reverse=True)
+        values: dict[str, dict[str, Any]] = {}
+        for field in BODY_MEASUREMENT_FIELDS:
+            logged = [
+                (entry["date"], entry[field])
+                for entry in entries
+                if isinstance(entry.get(field), int | float)
+            ]
+            if not logged:
+                continue
+            (date, value), previous = logged[0], logged[1] if len(logged) > 1 else None
+            values[field] = {
+                "value": value,
+                "date": date,
+                "previous_value": previous[1] if previous else None,
+                "previous_date": previous[0] if previous else None,
+                "change": round(value - previous[1], 2) if previous else None,
+            }
+        return {
+            "latest_date": entries[0]["date"] if entries else None,
+            "values": values,
+            "history": entries[:BODY_MEASUREMENT_HISTORY],
+        }
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Hevy API.
 
@@ -811,6 +886,11 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Update PRs from all fetched workouts
             self._update_exercise_prs(self._workout_history)
+
+            try:
+                await self._update_body_measurements()
+            except HevyApiError as err:
+                _LOGGER.warning("Could not fetch Hevy body measurements: %s", err)
 
             # Process data for sensors
             last_workout = workouts[0] if workouts else None
@@ -1144,6 +1224,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "weekly_distance": weekly_distance_data,
                 "workout_dates": workout_dates_sorted,
                 "workout_summaries": workout_summaries,
+                "body_measurements": self._summarize_body_measurements(
+                    self._body_measurements.values()
+                ),
             }
 
         except HevyApiError as err:

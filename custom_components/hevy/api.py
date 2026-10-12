@@ -21,6 +21,10 @@ class HevyAuthError(HevyApiError):
     """Exception for authentication errors."""
 
 
+class HevyNotFoundError(HevyApiError):
+    pass
+
+
 class HevyApiClient:
     """Hevy API Client."""
 
@@ -84,6 +88,8 @@ class HevyApiClient:
                         raise HevyAuthError("Invalid API key")
                     if response.status == 403:
                         raise HevyAuthError("Access forbidden")
+                    if response.status == 404:
+                        raise HevyNotFoundError("Hevy returned HTTP 404")
                     if response.status >= 400:
                         raise HevyApiError(f"Hevy returned HTTP {response.status}")
 
@@ -180,6 +186,12 @@ class HevyApiClient:
         return await self._request(
             "GET", "/routines", params={"page": page, "pageSize": page_size}
         )
+
+    async def get_body_measurements(
+        self, page: int = 1, page_size: int = 10
+    ) -> dict[str, Any]:
+        params = {"page": page, "pageSize": page_size}
+        return await self._request("GET", "/body_measurements", params=params)
 
     async def close(self) -> None:
         """Close the session if owned by this client."""

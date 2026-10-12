@@ -758,6 +758,34 @@ Dynamically created for each unique exercise in your history.
 | `personal_record_reps` | Most reps at PR weight |
 | `exercise_template_id` | Hevy exercise ID |
 
+### Body Measurement Sensors
+
+Read from Hevy's *Log Measurements* screen (`GET /v1/body_measurements`). One sensor is
+created for each field you have logged at least once: body weight, lean body mass, body fat,
+neck, shoulder, chest, left/right bicep, left/right forearm, abdomen, waist, hips,
+left/right thigh and left/right calf.
+
+**Example:** `sensor.hevy_waist`
+**State:** The most recently logged value. Hevy stores kg / cm; Home Assistant shows lb / in
+when the integration's unit system is imperial. Changing the unit system updates existing
+sensors after the integration reloads; a unit you pick for a sensor in its entity settings is
+kept. If a newer entry leaves a field empty, the sensor keeps the last value that was logged.
+
+All entries are read at setup and once a day, and regular updates read the newest 50 entries,
+so a field you log rarely (such as waist) keeps its value however many entries follow it.
+Edits and deletions of older entries show up after the next daily read.
+
+| Attribute | Description |
+|-----------|-------------|
+| `measured_on` | Date of that value |
+| `previous_value` | The value logged before it |
+| `previous_measured_on` | Date of the previous value |
+| `change` | Difference to the previous value |
+
+`sensor.hevy_last_body_measurement` holds the date of the newest entry, and its `history`
+attribute lists the last 30 entries (newest first, in kg / cm). All value sensors have a
+`state_class`, so Home Assistant keeps long-term statistics for trend charts.
+
 ---
 
 ## Services

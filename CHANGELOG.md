@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+Body measurements from Hevy's *Log Measurements* screen as sensors.
+
+- Add a sensor per logged body measurement (body weight, lean body mass, body fat, neck, shoulder, chest, biceps, forearms, abdomen, waist, hips, thighs, calves) with `measured_on`, `previous_value` and `change` attributes. Sensors appear for fields you have logged at least once.
+- Values are stored in kg / cm and shown in the integration's unit system (lb / in for imperial). Changing that setting updates existing sensors, including `previous_value` and `change`; a unit you pick for a sensor yourself is kept. They have a `state_class`, so long-term statistics work.
+- Add `sensor.hevy_last_body_measurement` with the date of the newest entry and the last 30 entries as a `history` attribute.
+- Measurements you log less often, such as waist, keep their sensor, previous value and change. All entries are read at setup and once a day, so edited and deleted entries are picked up; regular updates read the newest 50 entries.
+- A failed body measurement request keeps the last known values and never fails the workout update.
+
 ### Fixed
 
 - Keep validation schema types compatible with Home Assistant 2026.10 while retaining legacy runtime imports. Update the test harness to stable 0.13.371.
