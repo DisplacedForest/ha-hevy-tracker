@@ -265,6 +265,8 @@ This supports A-B-C rotation training (e.g., lift, rest, lift, rest, lift).
 - [ ] Body measurement sensors appear only for fields logged at least once
 - [ ] A body measurement field keeps its last value when a newer entry leaves it empty
 - [ ] Body measurement units follow the unit system (kg / cm or lb / in), including `previous_value` and `change`
+- [ ] Switching the unit system updates existing body measurement sensors after reload, and a unit picked per entity is kept
+- [ ] A field logged only before the newest 50 entries gets its sensor on a fresh setup and keeps its value, `previous_value` and `change`
 - [ ] A failed body measurement request keeps the last values and workout sensors still update
 
 ## Release Process

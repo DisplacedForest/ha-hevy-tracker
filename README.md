@@ -767,8 +767,13 @@ left/right thigh and left/right calf.
 
 **Example:** `sensor.hevy_waist`
 **State:** The most recently logged value. Hevy stores kg / cm; Home Assistant shows lb / in
-when the integration's unit system is imperial (change it per entity like any sensor). If a
-newer entry leaves a field empty, the sensor keeps the last value that was logged.
+when the integration's unit system is imperial. Changing the unit system updates existing
+sensors after the integration reloads; a unit you pick for a sensor in its entity settings is
+kept. If a newer entry leaves a field empty, the sensor keeps the last value that was logged.
+
+All entries are read at setup and once a day, and regular updates read the newest 50 entries,
+so a field you log rarely (such as waist) keeps its value however many entries follow it.
+Edits and deletions of older entries show up after the next daily read.
 
 | Attribute | Description |
 |-----------|-------------|
