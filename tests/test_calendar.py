@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -297,8 +297,8 @@ class TestHevyCalendarEntityGetEvents:
     async def test_get_events_full_range(self, entity: HevyCalendarEntity) -> None:
         events = await entity.async_get_events(
             None,
-            datetime(2026, 7, 1, tzinfo=timezone.utc),
-            datetime(2026, 8, 1, tzinfo=timezone.utc),
+            datetime(2026, 7, 1, tzinfo=UTC),
+            datetime(2026, 8, 1, tzinfo=UTC),
         )
         assert len(events) == 3
         # Should be sorted oldest-first
@@ -309,8 +309,8 @@ class TestHevyCalendarEntityGetEvents:
     async def test_get_events_narrow_range(self, entity: HevyCalendarEntity) -> None:
         events = await entity.async_get_events(
             None,
-            datetime(2026, 7, 14, tzinfo=timezone.utc),
-            datetime(2026, 7, 16, tzinfo=timezone.utc),
+            datetime(2026, 7, 14, tzinfo=UTC),
+            datetime(2026, 7, 16, tzinfo=UTC),
         )
         assert len(events) == 1
         assert events[0].summary == "Pull Day"
@@ -332,8 +332,8 @@ class TestHevyCalendarEntityGetEvents:
         entity = HevyCalendarEntity(coordinator_imperial, mock_entry)
         events = await entity.async_get_events(
             None,
-            datetime(2026, 7, 14, tzinfo=timezone.utc),
-            datetime(2026, 7, 16, tzinfo=timezone.utc),
+            datetime(2026, 7, 14, tzinfo=UTC),
+            datetime(2026, 7, 16, tzinfo=UTC),
         )
         assert len(events) == 1
         assert events[0].summary == "Late Night Workout"
@@ -341,8 +341,8 @@ class TestHevyCalendarEntityGetEvents:
     async def test_get_events_empty_range(self, entity: HevyCalendarEntity) -> None:
         events = await entity.async_get_events(
             None,
-            datetime(2026, 8, 1, tzinfo=timezone.utc),
-            datetime(2026, 9, 1, tzinfo=timezone.utc),
+            datetime(2026, 8, 1, tzinfo=UTC),
+            datetime(2026, 9, 1, tzinfo=UTC),
         )
         assert len(events) == 0
 
@@ -353,8 +353,8 @@ class TestHevyCalendarEntityGetEvents:
         entity = HevyCalendarEntity(coordinator_imperial, mock_entry)
         events = await entity.async_get_events(
             None,
-            datetime(2026, 7, 1, tzinfo=timezone.utc),
-            datetime(2026, 8, 1, tzinfo=timezone.utc),
+            datetime(2026, 7, 1, tzinfo=UTC),
+            datetime(2026, 8, 1, tzinfo=UTC),
         )
         assert len(events) == 0
 
@@ -375,8 +375,8 @@ class TestHevyCalendarEntityGetEvents:
         entity = HevyCalendarEntity(coordinator_imperial, mock_entry)
         events = await entity.async_get_events(
             None,
-            datetime(2026, 1, 1, tzinfo=timezone.utc),
-            datetime(2026, 12, 31, tzinfo=timezone.utc),
+            datetime(2026, 1, 1, tzinfo=UTC),
+            datetime(2026, 12, 31, tzinfo=UTC),
         )
         assert len(events) == 1
         assert events[0].summary == "Push Day"

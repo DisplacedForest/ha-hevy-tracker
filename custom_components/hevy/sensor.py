@@ -201,8 +201,8 @@ class HevyLastWorkoutDateSensor(HevyBaseSensor):
             return None
 
         try:
-            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
+            return datetime.fromisoformat(date_str)
+        except (ValueError, TypeError):
             return None
 
     @property
