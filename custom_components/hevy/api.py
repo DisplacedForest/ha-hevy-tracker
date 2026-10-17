@@ -89,7 +89,7 @@ class HevyApiClient:
 
                     return await response.json()
 
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             raise HevyApiError("Request timeout") from err
         except aiohttp.ClientError as err:
             raise HevyApiError("Connection to Hevy failed") from err

@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
@@ -44,3 +45,25 @@ async def test_user_info_uses_authenticated_account_endpoint():
     assert args[0] == "GET"
     assert args[1].endswith("/v1/user/info")
     assert kwargs["headers"] == {"api-key": "fixture-key"}
+
+
+async def test_request_timeout_preserves_error_and_cause():
+    session = MagicMock()
+    timeout = TimeoutError("sensitive-transport-value")
+    session.request.side_effect = timeout
+    client = HevyApiClient("synthetic-key", session)
+    with pytest.raises(HevyApiError, match="^Request timeout$") as caught:
+        await client.get_workout_count()
+    assert caught.value.__cause__ is timeout
+
+
+async def test_request_deadline_becomes_api_timeout(monkeypatch):
+    monkeypatch.setattr("custom_components.hevy.api.API_TIMEOUT", 0)
+    request = MagicMock()
+    request.__aenter__ = AsyncMock(side_effect=asyncio.Event().wait)
+    session = MagicMock()
+    session.request.return_value = request
+    client = HevyApiClient("synthetic-key", session)
+    with pytest.raises(HevyApiError, match="^Request timeout$") as caught:
+        await client.get_workout_count()
+    assert isinstance(caught.value.__cause__, TimeoutError)

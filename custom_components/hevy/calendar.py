@@ -34,8 +34,8 @@ def _parse_dt(date_str: str | None) -> datetime | None:
     if not date_str:
         return None
     try:
-        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
+        return datetime.fromisoformat(date_str)
+    except (ValueError, TypeError):
         return None
 
 

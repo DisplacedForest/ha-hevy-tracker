@@ -174,12 +174,10 @@ def async_register_services(hass: HomeAssistant) -> None:
             start_time = workout.get("start_time")
             if start_time:
                 try:
-                    workout_dt = datetime.fromisoformat(
-                        start_time.replace("Z", "+00:00")
-                    )
+                    workout_dt = datetime.fromisoformat(start_time)
                     if workout_dt > cutoff:
                         filtered_workouts.append(workout)
-                except (ValueError, AttributeError):
+                except (ValueError, TypeError):
                     continue
 
         # Build enriched response
@@ -195,23 +193,23 @@ def async_register_services(hass: HomeAssistant) -> None:
 
             if start_time and end_time:
                 try:
-                    start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                    end_dt = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+                    start_dt = datetime.fromisoformat(start_time)
+                    end_dt = datetime.fromisoformat(end_time)
                     duration_minutes = round(
                         (end_dt - start_dt).total_seconds() / 60, 1
                     )
                     total_duration += duration_minutes
-                except (ValueError, AttributeError):
+                except (ValueError, TypeError):
                     pass
 
             if start_time:
                 try:
                     day_str = dt_util.as_local(
-                        datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                        datetime.fromisoformat(start_time)
                     ).strftime("%Y-%m-%d")
                     if day_str not in workout_days:
                         workout_days.append(day_str)
-                except (ValueError, AttributeError):
+                except (ValueError, TypeError):
                     pass
 
             workout_volume = coordinator._calculate_total_volume(workout)

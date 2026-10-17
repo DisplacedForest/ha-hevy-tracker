@@ -104,9 +104,7 @@ def prefill_exercises(
         if not isinstance(workout, dict):
             continue
         try:
-            started = datetime.fromisoformat(
-                workout["start_time"].replace("Z", "+00:00")
-            )
+            started = datetime.fromisoformat(workout["start_time"])
             if started.tzinfo is None:
                 continue
         except (KeyError, TypeError, ValueError, AttributeError):
