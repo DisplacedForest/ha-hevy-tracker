@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -12,9 +13,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.hevy.api import HevyApiClient
 from custom_components.hevy.const import (
+    BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE,
     CONF_API_KEY,
     CONF_UNIT_SYSTEM,
     DOMAIN,
+    MAX_BODY_MEASUREMENT_PAGES,
     UNIT_SYSTEM_IMPERIAL,
     UNIT_SYSTEM_METRIC,
 )
@@ -292,6 +295,72 @@ async def test_body_measurement_kept_after_leaving_first_50_entries(hass) -> Non
     assert float(waist.state) == 81
     assert waist.attributes["previous_value"] == 83
     assert waist.attributes["change"] == -2
+
+
+async def _refresh(hass, entry, get_body_measurements: AsyncMock) -> None:
+    with (
+        _patch_api(),
+        patch.object(HevyApiClient, "get_body_measurements", get_body_measurements),
+    ):
+        await hass.data[DOMAIN][entry.entry_id].async_refresh()
+        await hass.async_block_till_done()
+
+
+async def test_deleted_newest_body_measurement_disappears_on_next_update(
+    hass,
+) -> None:
+    entries = [
+        {"date": body_day(0), "weight_kg": 79.0},
+        *_weights(59, first=1),
+    ]
+    entry = await _setup_metric(hass, paged_body_measurements(entries))
+    assert float(_body_state(hass, "_body_weight").state) == 79.0
+
+    pages = AsyncMock(side_effect=paged_body_measurements(entries[1:]))
+    await _refresh(hass, entry, pages)
+
+    assert pages.call_count == MAX_BODY_MEASUREMENT_PAGES
+    weight = _body_state(hass, "_body_weight")
+    assert float(weight.state) == 80.0
+    assert weight.attributes["measured_on"] == body_day(1)
+    assert _body_state(hass, "_last_body_measurement").state == body_day(1)
+
+
+async def test_invalid_body_measurement_response_keeps_all_sensors(hass) -> None:
+    entry = await _setup_metric(hass, BODY_MEASUREMENTS)
+
+    pages = AsyncMock(side_effect=json.JSONDecodeError("Expecting value", "<html>", 0))
+    await _refresh(hass, entry, pages)
+
+    assert pages.called
+    assert hass.data[DOMAIN][entry.entry_id].last_update_success
+    workout_count = _body_state(hass, "_workout_count")
+    assert workout_count.state == "42"
+    assert float(_body_state(hass, "_body_weight").state) == 78.5
+    assert float(_body_state(hass, "_waist").state) == 81
+    assert _body_state(hass, "_last_body_measurement").state == "2026-03-09"
+
+
+async def test_body_measurement_beyond_long_history_on_fresh_setup(hass) -> None:
+    entries = [*_weights(2000), {"date": body_day(2000), "waist": 83}]
+    pages = AsyncMock(side_effect=paged_body_measurements(entries))
+    entry = await _setup_metric(hass, pages)
+    assert pages.call_count == BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE
+    assert _waist(hass) is None
+
+    for _ in range(20):
+        pages.reset_mock()
+        await _refresh(hass, entry, pages)
+        assert pages.call_count <= (
+            MAX_BODY_MEASUREMENT_PAGES + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE
+        )
+        if _waist(hass) is not None:
+            break
+
+    waist = _waist(hass)
+    assert waist is not None
+    assert float(waist.state) == 83
+    assert waist.attributes["measured_on"] == body_day(2000)
 
 
 async def _switch_unit_system(hass, entry, unit_system: str) -> None:
