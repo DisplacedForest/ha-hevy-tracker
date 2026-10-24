@@ -487,6 +487,8 @@ class TestBodyMeasurements:
             {"body_measurements": "invalid", "page_count": 1},
             {"body_measurements": ["invalid"], "page_count": 1},
             {"body_measurements": [{"date": 20260302}], "page_count": 1},
+            {"body_measurements": [{"date": None}], "page_count": 1},
+            {"body_measurements": [{"weight_kg": 80.0}], "page_count": 1},
             {"body_measurements": [], "page_count": "1"},
             {},
             {"page_count": 1},
@@ -762,22 +764,27 @@ class TestBodyMeasurements:
         assert body_day(deleted) not in stored
         assert set(stored) == {entry["date"] for entry in entries}
 
-    @pytest.mark.parametrize("undated_page", [10, 18, 19])
-    async def test_batched_full_read_finishes_past_page_without_dates(
-        self, metric_coordinator, mock_client, undated_page
+    async def test_step_back_never_reads_before_first_page(
+        self, metric_coordinator, mock_client
     ) -> None:
         entries = _weights(301)
-        for index in range((undated_page - 1) * 10, undated_page * 10):
-            entries[index] = {"date": None, "weight_kg": 80.0}
         mock_client.get_body_measurements = AsyncMock(
             side_effect=paged_body_measurements(entries)
         )
+        metric_coordinator._body_measurement_sync_page = 1
+        metric_coordinator._body_measurement_sync_oldest = body_day(25)
+        metric_coordinator._body_measurement_sync_anchor = body_day(-1)
+
         updates = 0
         while metric_coordinator._body_measurements_synced is None:
             await metric_coordinator._update_body_measurements()
             updates += 1
-            assert updates < 10
+            assert updates < 20
 
+        pages = [
+            call.kwargs["page"] for call in mock_client.get_body_measurements.mock_calls
+        ]
+        assert min(pages) == 1
         assert set(metric_coordinator._body_measurements) == {
-            entry["date"] for entry in entries if entry["date"] is not None
+            entry["date"] for entry in entries
         }

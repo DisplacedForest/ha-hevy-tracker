@@ -820,8 +820,6 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not isinstance(entry, dict):
                 raise HevyApiError("Invalid body measurement response")
             day = entry.get("date")
-            if day is None:
-                continue
             if not isinstance(day, str):
                 raise HevyApiError("Invalid body measurement response")
             entries[day] = entry
@@ -952,7 +950,10 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return
             anchor = self._body_measurement_sync_anchor or newest
             if first_page_newest is None or first_page_newest < anchor:
-                self._body_measurement_sync_page = page - 1
+                if page == 1:
+                    self._restart_body_measurement_sync()
+                else:
+                    self._body_measurement_sync_page = page - 1
                 return
         if complete:
             self._replace_body_measurements(
