@@ -268,7 +268,7 @@ This supports A-B-C rotation training (e.g., lift, rest, lift, rest, lift).
 - [ ] Switching the unit system updates existing body measurement sensors after reload, and a unit picked per entity is kept
 - [ ] A field logged only before the newest 50 entries gets its sensor on a fresh setup and keeps its value, `previous_value` and `change`
 - [ ] Deleting the newest body measurement entry updates the sensors on the next update
-- [ ] A history longer than 200 entries is read completely over several updates, and a field logged only before it gets its sensor
+- [ ] A history longer than 190 entries is read completely over several updates, and a field logged only before it gets its sensor
 - [ ] A failed or invalid body measurement response keeps the last values and workout sensors still update
 
 ## Release Process
