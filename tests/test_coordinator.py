@@ -367,7 +367,7 @@ class TestBodyMeasurements:
             side_effect=paged_body_measurements(entries)
         )
         await metric_coordinator._update_body_measurements()
-        assert mock_client.get_body_measurements.call_count == 6
+        assert mock_client.get_body_measurements.call_count == 7
         assert metric_coordinator._body_measurements[body_day(50)]["waist"] == 81
 
     async def test_fetch_treats_404_as_empty(
@@ -416,7 +416,7 @@ class TestBodyMeasurements:
         freezer.tick(timedelta(hours=24))
         await metric_coordinator._update_body_measurements()
         assert body_day(60) not in metric_coordinator._body_measurements
-        assert mock_client.get_body_measurements.call_count == 11
+        assert mock_client.get_body_measurements.call_count == 12
 
     async def test_summary_keeps_last_logged_value_per_field(
         self, metric_coordinator
@@ -648,3 +648,63 @@ class TestBodyMeasurements:
         stored = metric_coordinator._body_measurements
         assert body_day(deleted) not in stored
         assert set(stored) == {entry["date"] for entry in entries}
+
+    async def test_batched_full_read_recovers_entry_moved_onto_read_page(
+        self, metric_coordinator, mock_client
+    ) -> None:
+        entries = _weights(301)
+        entries[100] = {"date": body_day(100), "waist": 77}
+        pages = paged_body_measurements(entries)
+        deleted = False
+
+        async def get_body_measurements(page: int = 1, page_size: int = 10) -> dict:
+            nonlocal deleted
+            if page == 11 and not deleted:
+                deleted = True
+                del entries[0]
+            return await pages(page, page_size)
+
+        mock_client.get_body_measurements = AsyncMock(side_effect=get_body_measurements)
+        updates = 0
+        while metric_coordinator._body_measurements_synced is None:
+            mock_client.get_body_measurements.reset_mock()
+            await metric_coordinator._update_body_measurements()
+            updates += 1
+            assert mock_client.get_body_measurements.call_count <= (
+                MAX_BODY_MEASUREMENT_PAGES + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE
+            )
+            assert updates < 10
+        await metric_coordinator._update_body_measurements()
+
+        assert deleted
+        stored = metric_coordinator._body_measurements
+        assert stored[body_day(100)]["waist"] == 77
+        assert set(stored) == {entry["date"] for entry in entries}
+        summary = metric_coordinator._summarize_body_measurements(stored.values())
+        assert summary["values"]["waist"]["value"] == 77
+
+    async def test_batched_full_read_keeps_entries_when_newer_entry_is_added(
+        self, metric_coordinator, mock_client
+    ) -> None:
+        entries = _weights(301, first=1)
+        pages = paged_body_measurements(entries)
+        added = False
+
+        async def get_body_measurements(page: int = 1, page_size: int = 10) -> dict:
+            nonlocal added
+            if page == 11 and not added:
+                added = True
+                entries.insert(0, {"date": body_day(0), "weight_kg": 79.0})
+            return await pages(page, page_size)
+
+        mock_client.get_body_measurements = AsyncMock(side_effect=get_body_measurements)
+        updates = 0
+        while metric_coordinator._body_measurements_synced is None:
+            await metric_coordinator._update_body_measurements()
+            updates += 1
+            assert updates < 10
+
+        assert added
+        stored = metric_coordinator._body_measurements
+        assert set(stored) == {entry["date"] for entry in entries}
+        assert stored[body_day(0)]["weight_kg"] == 79.0

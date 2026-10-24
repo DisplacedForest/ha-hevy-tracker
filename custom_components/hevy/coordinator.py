@@ -826,6 +826,17 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             entries[day] = entry
         return entries, page_count
 
+    async def _read_body_measurement_page(
+        self, page: int
+    ) -> tuple[dict[str, dict[str, Any]], int]:
+        try:
+            data = await self.client.get_body_measurements(page=page, page_size=10)
+        except HevyNotFoundError:
+            return {}, 0
+        except ValueError as err:
+            raise HevyApiError("Invalid body measurement response") from err
+        return self._parse_body_measurement_page(data)
+
     async def _fetch_body_measurement_pages(
         self, first_page: int, max_pages: int
     ) -> tuple[dict[str, dict[str, Any]], str | None, bool]:
@@ -837,17 +848,35 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entries: dict[str, dict[str, Any]] = {}
         first_page_newest: str | None = None
         for page in range(first_page, first_page + max_pages):
-            try:
-                data = await self.client.get_body_measurements(page=page, page_size=10)
-            except HevyNotFoundError:
-                return entries, first_page_newest, True
-            except ValueError as err:
-                raise HevyApiError("Invalid body measurement response") from err
-            page_entries, page_count = self._parse_body_measurement_page(data)
+            page_entries, page_count = await self._read_body_measurement_page(page)
             if page == first_page:
                 first_page_newest = max(page_entries, default=None)
             entries.update(page_entries)
             if not page_entries or page >= page_count:
+                return entries, first_page_newest, True
+        return entries, first_page_newest, False
+
+    async def _fetch_body_measurement_batch(
+        self, first_page: int
+    ) -> tuple[dict[str, dict[str, Any]], str | None, bool] | None:
+        last_page = first_page + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE - 2
+        entries, page_count = await self._read_body_measurement_page(first_page)
+        first_page_newest = max(entries, default=None)
+        if not entries or first_page >= page_count:
+            return entries, first_page_newest, True
+
+        check_page = min(last_page, page_count)
+        check_entries, _ = await self._read_body_measurement_page(check_page)
+        if not check_entries:
+            return None
+        for page in range(first_page + 1, last_page + 1):
+            page_entries, page_count = await self._read_body_measurement_page(page)
+            if page == check_page and page_entries.keys() != check_entries.keys():
+                return None
+            entries.update(page_entries)
+            if not page_entries or page >= page_count:
+                if page < check_page:
+                    return None
                 return entries, first_page_newest, True
         return entries, first_page_newest, False
 
@@ -899,9 +928,10 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if page is None:
             return
         newest = self._body_measurement_sync_oldest
-        entries, first_page_newest, complete = await self._fetch_body_measurement_pages(
-            page, BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE
-        )
+        batch = await self._fetch_body_measurement_batch(page)
+        if batch is None:
+            return
+        entries, first_page_newest, complete = batch
         if newest is not None and (
             first_page_newest is None or first_page_newest < newest
         ):
@@ -920,7 +950,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Start the next batch on this batch's last page to check that
             # the pages have not moved in between
             self._body_measurement_sync_page = (
-                page + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE - 1
+                page + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE - 2
             )
             self._body_measurement_sync_oldest = oldest
 
