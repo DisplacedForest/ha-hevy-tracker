@@ -71,6 +71,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Next page of a running full read, and the oldest date it has read so far
         self._body_measurement_sync_page: int | None = None
         self._body_measurement_sync_oldest: str | None = None
+        self._body_measurement_sync_anchor: str | None = None
         self.workout_session: WorkoutSession | None = None
         self.account_name: str | None = None
 
@@ -802,7 +803,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @staticmethod
     def _parse_body_measurement_page(
         data: Any,
-    ) -> tuple[dict[str, dict[str, Any]], int]:
+    ) -> tuple[dict[str, dict[str, Any]], int, list[dict[str, Any]]]:
         if not isinstance(data, dict):
             raise HevyApiError("Invalid body measurement response")
         raw_entries = data.get("body_measurements")
@@ -824,15 +825,15 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not isinstance(day, str):
                 raise HevyApiError("Invalid body measurement response")
             entries[day] = entry
-        return entries, page_count
+        return entries, page_count, raw_entries
 
     async def _read_body_measurement_page(
         self, page: int
-    ) -> tuple[dict[str, dict[str, Any]], int]:
+    ) -> tuple[dict[str, dict[str, Any]], int, list[dict[str, Any]]]:
         try:
             data = await self.client.get_body_measurements(page=page, page_size=10)
         except HevyNotFoundError:
-            return {}, 0
+            return {}, 0, []
         except ValueError as err:
             raise HevyApiError("Invalid body measurement response") from err
         return self._parse_body_measurement_page(data)
@@ -848,37 +849,49 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entries: dict[str, dict[str, Any]] = {}
         first_page_newest: str | None = None
         for page in range(first_page, first_page + max_pages):
-            page_entries, page_count = await self._read_body_measurement_page(page)
+            page_entries, page_count, raw = await self._read_body_measurement_page(page)
             if page == first_page:
                 first_page_newest = max(page_entries, default=None)
             entries.update(page_entries)
-            if not page_entries or page >= page_count:
+            if not raw or page >= page_count:
                 return entries, first_page_newest, True
         return entries, first_page_newest, False
 
     async def _fetch_body_measurement_batch(
         self, first_page: int
-    ) -> tuple[dict[str, dict[str, Any]], str | None, bool] | None:
-        last_page = first_page + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE - 2
-        entries, page_count = await self._read_body_measurement_page(first_page)
+    ) -> tuple[dict[str, dict[str, Any]], str | None, str | None, int, bool] | None:
+        entries, page_count, first_raw = await self._read_body_measurement_page(
+            first_page
+        )
         first_page_newest = max(entries, default=None)
-        if not entries or first_page >= page_count:
-            return entries, first_page_newest, True
+        if not first_raw or first_page >= page_count:
+            return entries, first_page_newest, None, first_page, True
 
-        check_page = min(last_page, page_count)
-        check_entries, _ = await self._read_body_measurement_page(check_page)
-        if not check_entries:
+        check_page = min(
+            first_page + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE - 3, page_count
+        )
+        _, _, check_raw = await self._read_body_measurement_page(check_page)
+        if not check_raw:
             return None
-        for page in range(first_page + 1, last_page + 1):
-            page_entries, page_count = await self._read_body_measurement_page(page)
-            if page == check_page and page_entries.keys() != check_entries.keys():
+        complete = False
+        last_page_newest: str | None = None
+        for page in range(first_page + 1, check_page + 1):
+            page_entries, page_count, raw = await self._read_body_measurement_page(page)
+            if page == check_page and raw != check_raw:
+                return None
+            if not raw:
                 return None
             entries.update(page_entries)
-            if not page_entries or page >= page_count:
+            if page >= page_count:
                 if page < check_page:
                     return None
-                return entries, first_page_newest, True
-        return entries, first_page_newest, False
+                complete = True
+            last_page_newest = max(page_entries, default=None)
+
+        _, _, first_raw_again = await self._read_body_measurement_page(first_page)
+        if first_raw_again != first_raw:
+            return None
+        return entries, first_page_newest, last_page_newest, check_page, complete
 
     def _replace_body_measurements(
         self,
@@ -910,8 +923,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or now - self._body_measurements_synced
             >= timedelta(hours=BODY_MEASUREMENT_SYNC_HOURS)
         ):
-            self._body_measurement_sync_page = 1
-            self._body_measurement_sync_oldest = None
+            self._restart_body_measurement_sync()
 
         if self._body_measurement_sync_page != 1:
             entries, _, complete = await self._fetch_body_measurement_pages(
@@ -931,33 +943,44 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         batch = await self._fetch_body_measurement_batch(page)
         if batch is None:
             return
-        entries, first_page_newest, complete = batch
-        if newest is not None and (
-            first_page_newest is None or first_page_newest < newest
-        ):
-            # Entries were removed before this page since the last batch, so
-            # the pages moved and some entries may have been skipped
-            self._body_measurement_sync_page = 1
-            self._body_measurement_sync_oldest = None
-            return
-        oldest = None if complete else min(entries)
-        self._replace_body_measurements(
-            entries, None if newest is None else first_page_newest, oldest
-        )
+        entries, first_page_newest, last_page_newest, last_page, complete = batch
+        if newest is not None:
+            if first_page_newest is not None and first_page_newest < newest:
+                # Entries were removed before this page since the last batch, so
+                # the pages moved and some entries may have been skipped
+                self._restart_body_measurement_sync()
+                return
+            anchor = self._body_measurement_sync_anchor or newest
+            if first_page_newest is None or first_page_newest < anchor:
+                self._body_measurement_sync_page = page - 1
+                return
         if complete:
+            self._replace_body_measurements(
+                entries, None if newest is None else first_page_newest, None
+            )
             self._finish_body_measurement_sync(now)
-        else:
-            # Start the next batch on this batch's last page to check that
-            # the pages have not moved in between
-            self._body_measurement_sync_page = (
-                page + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE - 2
+            return
+        if entries:
+            oldest = min(entries)
+            self._replace_body_measurements(
+                entries, None if newest is None else first_page_newest, oldest
             )
             self._body_measurement_sync_oldest = oldest
+        # Start the next batch on this batch's last page to check that
+        # the pages have not moved in between
+        self._body_measurement_sync_page = last_page
+        self._body_measurement_sync_anchor = last_page_newest
+
+    def _restart_body_measurement_sync(self) -> None:
+        self._body_measurement_sync_page = 1
+        self._body_measurement_sync_oldest = None
+        self._body_measurement_sync_anchor = None
 
     def _finish_body_measurement_sync(self, now: datetime) -> None:
         self._body_measurements_synced = now
         self._body_measurement_sync_page = None
         self._body_measurement_sync_oldest = None
+        self._body_measurement_sync_anchor = None
 
     @staticmethod
     def _summarize_body_measurements(
