@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from conftest import body_day, paged_body_measurements
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
@@ -336,6 +337,22 @@ async def test_invalid_body_measurement_response_keeps_all_sensors(hass) -> None
     assert hass.data[DOMAIN][entry.entry_id].last_update_success
     workout_count = _body_state(hass, "_workout_count")
     assert workout_count.state == "42"
+    assert float(_body_state(hass, "_body_weight").state) == 78.5
+    assert float(_body_state(hass, "_waist").state) == 81
+    assert _body_state(hass, "_last_body_measurement").state == "2026-03-09"
+
+
+@pytest.mark.parametrize("measurements", [False, {}, "", None, 0])
+async def test_falsey_body_measurement_response_keeps_all_sensors(
+    hass, measurements
+) -> None:
+    entry = await _setup_metric(hass, BODY_MEASUREMENTS)
+
+    pages = AsyncMock(return_value={"body_measurements": measurements, "page_count": 1})
+    await _refresh(hass, entry, pages)
+
+    assert pages.called
+    assert _body_state(hass, "_workout_count").state == "42"
     assert float(_body_state(hass, "_body_weight").state) == 78.5
     assert float(_body_state(hass, "_waist").state) == 81
     assert _body_state(hass, "_last_body_measurement").state == "2026-03-09"

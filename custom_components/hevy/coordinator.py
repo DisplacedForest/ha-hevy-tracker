@@ -805,12 +805,13 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> tuple[dict[str, dict[str, Any]], int]:
         if not isinstance(data, dict):
             raise HevyApiError("Invalid body measurement response")
-        raw_entries = data.get("body_measurements") or []
-        page_count = data.get("page_count") or 1
+        raw_entries = data.get("body_measurements")
+        page_count = data.get("page_count", 1)
         if (
             not isinstance(raw_entries, list)
             or not isinstance(page_count, int)
             or isinstance(page_count, bool)
+            or page_count < 0
         ):
             raise HevyApiError("Invalid body measurement response")
         entries: dict[str, dict[str, Any]] = {}

@@ -488,6 +488,16 @@ class TestBodyMeasurements:
             {"body_measurements": ["invalid"], "page_count": 1},
             {"body_measurements": [{"date": 20260302}], "page_count": 1},
             {"body_measurements": [], "page_count": "1"},
+            {},
+            {"page_count": 1},
+            {"body_measurements": False, "page_count": 1},
+            {"body_measurements": {}, "page_count": 1},
+            {"body_measurements": "", "page_count": 1},
+            {"body_measurements": None, "page_count": 1},
+            {"body_measurements": 0, "page_count": 1},
+            {"body_measurements": [], "page_count": False},
+            {"body_measurements": [], "page_count": None},
+            {"body_measurements": [], "page_count": -1},
         ],
     )
     async def test_invalid_response_keeps_workout_update_and_last_values(
@@ -600,3 +610,21 @@ class TestBodyMeasurements:
         while metric_coordinator._body_measurements_synced is None:
             await metric_coordinator._update_body_measurements()
         assert set(metric_coordinator._body_measurements) == remaining
+
+    async def test_valid_empty_response_clears_deleted_entries(
+        self, metric_coordinator, mock_client, freezer
+    ) -> None:
+        mock_client.get_body_measurements.return_value = {
+            "body_measurements": [{"date": "2026-03-02", "weight_kg": 80.0}],
+            "page_count": 1,
+        }
+        await metric_coordinator._async_update_data()
+
+        mock_client.get_body_measurements.return_value = {
+            "body_measurements": [],
+            "page_count": 0,
+        }
+        data = await metric_coordinator._async_update_data()
+
+        assert metric_coordinator._body_measurements == {}
+        assert data["body_measurements"]["values"] == {}
