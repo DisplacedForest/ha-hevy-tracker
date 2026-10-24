@@ -771,9 +771,13 @@ when the integration's unit system is imperial. Changing the unit system updates
 sensors after the integration reloads; a unit you pick for a sensor in its entity settings is
 kept. If a newer entry leaves a field empty, the sensor keeps the last value that was logged.
 
-All entries are read at setup and once a day, and regular updates read the newest 50 entries,
-so a field you log rarely (such as waist) keeps its value however many entries follow it.
-Edits and deletions of older entries show up after the next daily read.
+Every update reads the newest 50 entries, so new, edited and deleted entries among them show
+up right away. All entries are also read at setup and once a day, so a field you log rarely
+(such as waist) keeps its value however many entries follow it, and edits and deletions of
+older entries show up after the next daily read. To keep updates quick, that full read covers
+up to 200 entries per update and continues with the next update: with a long history, a field
+you last logged more than 200 entries ago gets its sensor a few updates after setup (about
+15 minutes per 200 entries at the default polling interval).
 
 | Attribute | Description |
 |-----------|-------------|
