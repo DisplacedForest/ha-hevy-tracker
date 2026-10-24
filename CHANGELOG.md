@@ -19,6 +19,8 @@ Body measurements from Hevy's *Log Measurements* screen as sensors.
 
 ### Fixed
 
+- Keep timestamp parsing and timeout handling compatible with Ruff 0.17, explicitly targeting the Python 3.12 minimum required by Home Assistant 2024.7.
+
 - Keep validation schema types compatible with Home Assistant 2026.10 while retaining legacy runtime imports. Update the test harness to stable 0.13.371.
 
 ## [1.6.0] - 2026-09-30

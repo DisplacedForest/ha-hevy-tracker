@@ -13,7 +13,7 @@ mise run setup
 lefthook install
 ```
 
-The repository pins Python 3.14 and Node 24. Test dependencies include Home Assistant and its custom component test harness. `mise run setup` creates `.venv` and installs the Python and JavaScript development dependencies.
+The integration supports Home Assistant 2024.7 and later, whose minimum Python version is 3.12. Ruff explicitly targets Python 3.12 to match that runtime baseline. The repository pins Python 3.14 and Node 24 for development and tests. Test dependencies include Home Assistant and its custom component test harness. `mise run setup` creates `.venv` and installs the Python and JavaScript development dependencies.
 
 ## Checks
 

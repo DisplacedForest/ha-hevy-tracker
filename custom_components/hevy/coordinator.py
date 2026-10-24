@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
@@ -189,7 +189,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Returns:
             List of workout dicts covering the last 30 days
         """
-        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=WORKOUT_HISTORY_DAYS)
+        cutoff = datetime.now(tz=UTC) - timedelta(days=WORKOUT_HISTORY_DAYS)
         all_workouts: list[dict[str, Any]] = []
 
         for page in range(1, MAX_WORKOUT_PAGES + 1):
@@ -204,13 +204,11 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 start_time = workout.get("start_time")
                 if start_time:
                     try:
-                        workout_dt = datetime.fromisoformat(
-                            start_time.replace("Z", "+00:00")
-                        )
+                        workout_dt = datetime.fromisoformat(start_time)
                         if workout_dt < cutoff:
                             reached_cutoff = True
                             break
-                    except (ValueError, AttributeError):
+                    except (ValueError, TypeError):
                         pass
                 all_workouts.append(workout)
 
@@ -308,7 +306,7 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Returns:
             Dict with muscle group tracking data
         """
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         muscle_last_trained: dict[str, datetime] = {}
         last_workout_primary: list[str] = []
         last_workout_secondary: list[str] = []
@@ -320,8 +318,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not start_time:
                 continue
             try:
-                workout_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
+                workout_dt = datetime.fromisoformat(start_time)
+            except (ValueError, TypeError):
                 continue
 
             for exercise in workout.get("exercises", []):
@@ -406,8 +404,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not start_time:
                 continue
             try:
-                workout_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
+                workout_dt = datetime.fromisoformat(start_time)
+            except (ValueError, TypeError):
                 continue
 
             if workout_dt <= week_ago:
@@ -507,8 +505,8 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not start_time:
                 continue
             try:
-                workout_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
+                workout_dt = datetime.fromisoformat(start_time)
+            except (ValueError, TypeError):
                 continue
 
             if workout_dt <= week_ago:
@@ -764,9 +762,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             start_time = workout.get("start_time")
             if start_time:
                 try:
-                    dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(start_time)
                     workout_dates.add(dt_util.as_local(dt).date())
-                except (ValueError, AttributeError):
+                except (ValueError, TypeError):
                     continue
 
         if not workout_dates:
@@ -903,12 +901,10 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 start_time = workout.get("start_time")
                 if start_time:
                     try:
-                        workout_dt = datetime.fromisoformat(
-                            start_time.replace("Z", "+00:00")
-                        )
+                        workout_dt = datetime.fromisoformat(start_time)
                         if workout_dt > week_ago:
                             weekly_count += 1
-                    except (ValueError, AttributeError):
+                    except (ValueError, TypeError):
                         continue
 
             # Check if worked out today
@@ -917,13 +913,11 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 start_time = last_workout.get("start_time")
                 if start_time:
                     try:
-                        workout_dt = datetime.fromisoformat(
-                            start_time.replace("Z", "+00:00")
-                        )
+                        workout_dt = datetime.fromisoformat(start_time)
                         worked_out_today = (
                             dt_util.as_local(workout_dt).date() == now.date()
                         )
-                    except (ValueError, AttributeError):
+                    except (ValueError, TypeError):
                         pass
 
             # Process exercises from last workout
@@ -992,15 +986,13 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 end_time = last_workout.get("end_time")
                 if start_time and end_time:
                     try:
-                        start_dt = datetime.fromisoformat(
-                            start_time.replace("Z", "+00:00")
-                        )
-                        end_dt = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+                        start_dt = datetime.fromisoformat(start_time)
+                        end_dt = datetime.fromisoformat(end_time)
                         duration = end_dt - start_dt
                         workout_duration_minutes = round(
                             duration.total_seconds() / 60, 1
                         )
-                    except (ValueError, AttributeError):
+                    except (ValueError, TypeError):
                         pass
 
             # Build per-exercise data
@@ -1116,9 +1108,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 start_time = workout.get("start_time")
                 if start_time:
                     try:
-                        dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                        dt = datetime.fromisoformat(start_time)
                         workout_dates.add(dt_util.as_local(dt).strftime("%Y-%m-%d"))
-                    except (ValueError, AttributeError):
+                    except (ValueError, TypeError):
                         continue
             workout_dates_sorted = sorted(workout_dates)
 
@@ -1130,11 +1122,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if not start_time:
                     continue
                 try:
-                    workout_dt = datetime.fromisoformat(
-                        start_time.replace("Z", "+00:00")
-                    )
+                    workout_dt = datetime.fromisoformat(start_time)
                     date_key = dt_util.as_local(workout_dt).strftime("%Y-%m-%d")
-                except (ValueError, AttributeError):
+                except (ValueError, TypeError):
                     continue
 
                 # Skip if we already have an entry for this date (first = most recent)
@@ -1145,11 +1135,11 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 duration_minutes = None
                 if end_time:
                     try:
-                        end_dt = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+                        end_dt = datetime.fromisoformat(end_time)
                         duration_minutes = round(
                             (end_dt - workout_dt).total_seconds() / 60, 1
                         )
-                    except (ValueError, AttributeError):
+                    except (ValueError, TypeError):
                         pass
 
                 # Build exercises list
