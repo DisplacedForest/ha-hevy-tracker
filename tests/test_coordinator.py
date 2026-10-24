@@ -628,3 +628,23 @@ class TestBodyMeasurements:
 
         assert metric_coordinator._body_measurements == {}
         assert data["body_measurements"]["values"] == {}
+
+    async def test_batched_full_read_drops_entry_deleted_on_reread_page(
+        self, metric_coordinator, mock_client
+    ) -> None:
+        entries = [*_weights(300), {"date": body_day(300), "waist": 81}]
+        mock_client.get_body_measurements = AsyncMock(
+            side_effect=paged_body_measurements(entries)
+        )
+        await metric_coordinator._update_body_measurements()
+        deleted = len(metric_coordinator._body_measurements) - 5
+        assert body_day(deleted) in metric_coordinator._body_measurements
+
+        del entries[deleted]
+        while metric_coordinator._body_measurements_synced is None:
+            await metric_coordinator._update_body_measurements()
+        await metric_coordinator._update_body_measurements()
+
+        stored = metric_coordinator._body_measurements
+        assert body_day(deleted) not in stored
+        assert set(stored) == {entry["date"] for entry in entries}

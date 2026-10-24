@@ -911,7 +911,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._body_measurement_sync_oldest = None
             return
         oldest = None if complete else min(entries)
-        self._replace_body_measurements(entries, newest, oldest)
+        self._replace_body_measurements(
+            entries, None if newest is None else first_page_newest, oldest
+        )
         if complete:
             self._finish_body_measurement_sync(now)
         else:
