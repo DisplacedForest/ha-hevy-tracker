@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
@@ -14,16 +14,21 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import PERCENTAGE, Platform, UnitOfLength, UnitOfMass
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util.unit_conversion import DistanceConverter, MassConverter
 
 from .const import (
+    BODY_MEASUREMENT_FIELDS,
     CONF_API_KEY,
     DOMAIN,
     SENSOR_CURRENT_STREAK,
+    SENSOR_LAST_BODY_MEASUREMENT,
     SENSOR_LAST_WORKOUT_DATE,
     SENSOR_LAST_WORKOUT_SUMMARY,
     SENSOR_MUSCLE_GROUP_SUMMARY,
@@ -32,6 +37,7 @@ from .const import (
     SENSOR_WEEKLY_MUSCLE_VOLUME,
     SENSOR_WEEKLY_WORKOUT_COUNT,
     SENSOR_WORKOUT_COUNT,
+    UNIT_SYSTEM_IMPERIAL,
 )
 from .coordinator import HevyDataUpdateCoordinator
 
@@ -65,7 +71,27 @@ async def async_setup_entry(
         HevyWeeklyMuscleVolumeSensor(coordinator, entry),
         HevyWeeklyDistanceSensor(coordinator, entry),
         HevyNextWorkoutSensor(coordinator, entry),
+        HevyLastBodyMeasurementSensor(coordinator, entry),
     ]
+
+    body_key = f"{entry.entry_id}_body_measurements"
+    hass.data[DOMAIN][body_key] = set()
+
+    def _new_body_measurement_sensors() -> list[HevyBodyMeasurementSensor]:
+        if not coordinator.data:
+            return []
+        logged = coordinator.data.get("body_measurements", {}).get("values", {})
+        known = hass.data[DOMAIN][body_key]
+        new = [
+            HevyBodyMeasurementSensor(coordinator, entry, field)
+            for field in BODY_MEASUREMENT_FIELDS
+            if field in logged and field not in known
+        ]
+        known.update(sensor.field for sensor in new)
+        _refresh_suggested_units(hass, new)
+        return new
+
+    entities.extend(_new_body_measurement_sensors())
 
     # Create per-exercise sensors dynamically
     if coordinator.data:
@@ -104,6 +130,38 @@ async def async_setup_entry(
             async_add_entities(new_entities)
 
     coordinator.async_add_listener(_add_new_exercise_sensors)
+
+    def _add_new_body_measurement_sensors() -> None:
+        if new := _new_body_measurement_sensors():
+            async_add_entities(new)
+
+    entry.async_on_unload(
+        coordinator.async_add_listener(_add_new_body_measurement_sensors)
+    )
+
+
+def _refresh_suggested_units(
+    hass: HomeAssistant, sensors: list[HevyBodyMeasurementSensor]
+) -> None:
+    registry = er.async_get(hass)
+    private_key = f"{Platform.SENSOR}.private"
+    for sensor in sensors:
+        suggested = sensor.suggested_unit_of_measurement
+        if suggested is None or sensor.unique_id is None:
+            continue
+        entity_id = registry.async_get_entity_id(
+            Platform.SENSOR, DOMAIN, sensor.unique_id
+        )
+        registry_entry = registry.async_get(entity_id) if entity_id else None
+        if registry_entry is None:
+            continue
+        private = dict(registry_entry.options.get(private_key) or {})
+        if private.get("suggested_unit_of_measurement") == suggested:
+            continue
+        private["refresh_initial_entity_options"] = True
+        registry.async_update_entity_options(
+            registry_entry.entity_id, private_key, private
+        )
 
 
 def get_device_info(entry: ConfigEntry) -> DeviceInfo:
@@ -601,6 +659,113 @@ class HevyWeeklyDistanceSensor(HevyBaseSensor):
             "period_end": distance_data.get("period_end"),
             "exercise_breakdown": distance_data.get("exercise_breakdown", {}),
             "distance_unit": distance_data.get("distance_unit"),
+        }
+
+
+class HevyLastBodyMeasurementSensor(HevyBaseSensor):
+    _attr_icon = "mdi:tape-measure"
+    _attr_device_class = SensorDeviceClass.DATE
+    _unrecorded_attributes = frozenset({"history"})
+
+    def __init__(
+        self, coordinator: HevyDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        super().__init__(coordinator, entry, SENSOR_LAST_BODY_MEASUREMENT)
+        self._attr_name = "Last body measurement"
+
+    def _summary(self) -> dict[str, Any]:
+        if not self.coordinator.data:
+            return {}
+        return self.coordinator.data.get("body_measurements", {})
+
+    @property
+    def native_value(self) -> date | None:
+        latest = self._summary().get("latest_date")
+        if not latest:
+            return None
+        try:
+            return date.fromisoformat(latest[:10])
+        except ValueError:
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"history": self._summary().get("history", [])}
+
+
+class HevyBodyMeasurementSensor(HevyBaseSensor):
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: HevyDataUpdateCoordinator,
+        entry: ConfigEntry,
+        field: str,
+    ) -> None:
+        key, name, kind = BODY_MEASUREMENT_FIELDS[field]
+        super().__init__(coordinator, entry, f"body_{key}")
+        self.field = field
+        self._attr_name = name
+        imperial = coordinator.unit_system == UNIT_SYSTEM_IMPERIAL
+        if kind == "weight":
+            self._attr_device_class = SensorDeviceClass.WEIGHT
+            self._attr_native_unit_of_measurement = UnitOfMass.KILOGRAMS
+            self._attr_suggested_unit_of_measurement = (
+                UnitOfMass.POUNDS if imperial else UnitOfMass.KILOGRAMS
+            )
+            self._attr_suggested_display_precision = 1
+            self._attr_icon = "mdi:scale-bathroom"
+        elif kind == "percent":
+            self._attr_native_unit_of_measurement = PERCENTAGE
+            self._attr_suggested_display_precision = 1
+            self._attr_icon = "mdi:percent-circle-outline"
+        else:
+            self._attr_device_class = SensorDeviceClass.DISTANCE
+            self._attr_native_unit_of_measurement = UnitOfLength.CENTIMETERS
+            self._attr_suggested_unit_of_measurement = (
+                UnitOfLength.INCHES if imperial else UnitOfLength.CENTIMETERS
+            )
+            self._attr_suggested_display_precision = 1
+            self._attr_icon = "mdi:tape-measure"
+
+    def _logged(self) -> dict[str, Any] | None:
+        if not self.coordinator.data:
+            return None
+        values = self.coordinator.data.get("body_measurements", {}).get("values", {})
+        return values.get(self.field)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._logged() is not None
+
+    @property
+    def native_value(self) -> float | None:
+        logged = self._logged()
+        return logged["value"] if logged else None
+
+    def _in_display_unit(self, value: float | None) -> float | None:
+        if value is None:
+            return None
+        native = self.native_unit_of_measurement
+        shown = self.unit_of_measurement
+        if not shown or shown == native:
+            return value
+        if self.device_class == SensorDeviceClass.WEIGHT:
+            return round(MassConverter.convert(value, native, shown), 2)
+        if self.device_class == SensorDeviceClass.DISTANCE:
+            return round(DistanceConverter.convert(value, native, shown), 2)
+        return value
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        logged = self._logged()
+        if not logged:
+            return {}
+        return {
+            "measured_on": logged["date"],
+            "previous_value": self._in_display_unit(logged["previous_value"]),
+            "previous_measured_on": logged["previous_date"],
+            "change": self._in_display_unit(logged["change"]),
         }
 
 

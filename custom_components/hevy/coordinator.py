@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -10,10 +11,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import HevyApiClient, HevyApiError
+from .api import HevyApiClient, HevyApiError, HevyNotFoundError
 from .const import (
+    BODY_MEASUREMENT_FIELDS,
+    BODY_MEASUREMENT_HISTORY,
+    BODY_MEASUREMENT_SYNC_HOURS,
+    BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE,
     DOMAIN,
     KG_TO_LBS,
+    MAX_BODY_MEASUREMENT_PAGES,
     MAX_WORKOUT_PAGES,
     METERS_TO_KM,
     METERS_TO_MILES,
@@ -60,6 +66,12 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._exercise_distance_prs: dict[str, dict[str, Any]] = {}
         self._exercise_templates: dict[str, dict] = {}  # Cache templates by ID
         self._routines: list[dict[str, Any]] = []
+        self._body_measurements: dict[str, dict[str, Any]] = {}
+        self._body_measurements_synced: datetime | None = None
+        # Next page of a running full read, and the oldest date it has read so far
+        self._body_measurement_sync_page: int | None = None
+        self._body_measurement_sync_oldest: str | None = None
+        self._body_measurement_sync_anchor: str | None = None
         self.workout_session: WorkoutSession | None = None
         self.account_name: str | None = None
 
@@ -788,6 +800,217 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return streak
 
+    @staticmethod
+    def _parse_body_measurement_page(
+        data: Any,
+    ) -> tuple[dict[str, dict[str, Any]], int, list[dict[str, Any]]]:
+        if not isinstance(data, dict):
+            raise HevyApiError("Invalid body measurement response")
+        raw_entries = data.get("body_measurements")
+        page_count = data.get("page_count", 1)
+        if (
+            not isinstance(raw_entries, list)
+            or not isinstance(page_count, int)
+            or isinstance(page_count, bool)
+            or page_count < 0
+        ):
+            raise HevyApiError("Invalid body measurement response")
+        entries: dict[str, dict[str, Any]] = {}
+        for entry in raw_entries:
+            if not isinstance(entry, dict):
+                raise HevyApiError("Invalid body measurement response")
+            day = entry.get("date")
+            if not isinstance(day, str):
+                raise HevyApiError("Invalid body measurement response")
+            entries[day] = entry
+        return entries, page_count, raw_entries
+
+    async def _read_body_measurement_page(
+        self, page: int
+    ) -> tuple[dict[str, dict[str, Any]], int, list[dict[str, Any]]]:
+        try:
+            data = await self.client.get_body_measurements(page=page, page_size=10)
+        except HevyNotFoundError:
+            return {}, 0, []
+        except ValueError as err:
+            raise HevyApiError("Invalid body measurement response") from err
+        return self._parse_body_measurement_page(data)
+
+    async def _fetch_body_measurement_pages(
+        self, first_page: int, max_pages: int
+    ) -> tuple[dict[str, dict[str, Any]], str | None, bool]:
+        """Read up to max_pages pages, newest entries first.
+
+        Returns the entries by date, the newest date on first_page and whether
+        the last page was reached.
+        """
+        entries: dict[str, dict[str, Any]] = {}
+        first_page_newest: str | None = None
+        for page in range(first_page, first_page + max_pages):
+            page_entries, page_count, raw = await self._read_body_measurement_page(page)
+            if page == first_page:
+                first_page_newest = max(page_entries, default=None)
+            entries.update(page_entries)
+            if not raw or page >= page_count:
+                return entries, first_page_newest, True
+        return entries, first_page_newest, False
+
+    async def _fetch_body_measurement_batch(
+        self, first_page: int
+    ) -> tuple[dict[str, dict[str, Any]], str | None, str | None, int, bool] | None:
+        entries, page_count, first_raw = await self._read_body_measurement_page(
+            first_page
+        )
+        first_page_newest = max(entries, default=None)
+        if not first_raw or first_page >= page_count:
+            return entries, first_page_newest, None, first_page, True
+
+        check_page = min(
+            first_page + BODY_MEASUREMENT_SYNC_PAGES_PER_UPDATE - 3, page_count
+        )
+        _, _, check_raw = await self._read_body_measurement_page(check_page)
+        if not check_raw:
+            return None
+        complete = False
+        last_page_newest: str | None = None
+        for page in range(first_page + 1, check_page + 1):
+            page_entries, page_count, raw = await self._read_body_measurement_page(page)
+            if page == check_page and raw != check_raw:
+                return None
+            if not raw:
+                return None
+            entries.update(page_entries)
+            if page >= page_count:
+                if page < check_page:
+                    return None
+                complete = True
+            last_page_newest = max(page_entries, default=None)
+
+        _, _, first_raw_again = await self._read_body_measurement_page(first_page)
+        if first_raw_again != first_raw:
+            return None
+        return entries, first_page_newest, last_page_newest, check_page, complete
+
+    def _replace_body_measurements(
+        self,
+        entries: dict[str, dict[str, Any]],
+        newest: str | None,
+        oldest: str | None,
+    ) -> None:
+        """Replace the stored entries dated oldest to newest (None: unbounded)."""
+        retained = {
+            day: entry
+            for day, entry in self._body_measurements.items()
+            if (newest is not None and day > newest)
+            or (oldest is not None and day < oldest)
+        }
+        self._body_measurements = {**retained, **entries}
+
+    async def _update_body_measurements(self) -> None:
+        """Update the stored entries from the newest pages and a full read.
+
+        Hevy returns the entries newest first. Every update reads the newest
+        pages, so edits and deletions there show up right away. A full read
+        runs at setup and once a day, in batches of pages across updates so
+        that a long history is read completely without slowing the workout
+        refresh. Nothing is stored until a read has succeeded.
+        """
+        now = dt_util.utcnow()
+        if self._body_measurement_sync_page is None and (
+            self._body_measurements_synced is None
+            or now - self._body_measurements_synced
+            >= timedelta(hours=BODY_MEASUREMENT_SYNC_HOURS)
+        ):
+            self._restart_body_measurement_sync()
+
+        if self._body_measurement_sync_page != 1:
+            entries, _, complete = await self._fetch_body_measurement_pages(
+                1, MAX_BODY_MEASUREMENT_PAGES
+            )
+            if complete:
+                self._body_measurements = entries
+                self._finish_body_measurement_sync(now)
+            elif entries:
+                # Everything newer than the oldest entry read is in these pages
+                self._replace_body_measurements(entries, None, min(entries))
+
+        page = self._body_measurement_sync_page
+        if page is None:
+            return
+        newest = self._body_measurement_sync_oldest
+        batch = await self._fetch_body_measurement_batch(page)
+        if batch is None:
+            return
+        entries, first_page_newest, last_page_newest, last_page, complete = batch
+        if newest is not None:
+            if first_page_newest is not None and first_page_newest < newest:
+                # Entries were removed before this page since the last batch, so
+                # the pages moved and some entries may have been skipped
+                self._restart_body_measurement_sync()
+                return
+            anchor = self._body_measurement_sync_anchor or newest
+            if first_page_newest is None or first_page_newest < anchor:
+                if page == 1:
+                    self._restart_body_measurement_sync()
+                else:
+                    self._body_measurement_sync_page = page - 1
+                return
+        if complete:
+            self._replace_body_measurements(
+                entries, None if newest is None else first_page_newest, None
+            )
+            self._finish_body_measurement_sync(now)
+            return
+        if entries:
+            oldest = min(entries)
+            self._replace_body_measurements(
+                entries, None if newest is None else first_page_newest, oldest
+            )
+            self._body_measurement_sync_oldest = oldest
+        # Start the next batch on this batch's last page to check that
+        # the pages have not moved in between
+        self._body_measurement_sync_page = last_page
+        self._body_measurement_sync_anchor = last_page_newest
+
+    def _restart_body_measurement_sync(self) -> None:
+        self._body_measurement_sync_page = 1
+        self._body_measurement_sync_oldest = None
+        self._body_measurement_sync_anchor = None
+
+    def _finish_body_measurement_sync(self, now: datetime) -> None:
+        self._body_measurements_synced = now
+        self._body_measurement_sync_page = None
+        self._body_measurement_sync_oldest = None
+        self._body_measurement_sync_anchor = None
+
+    @staticmethod
+    def _summarize_body_measurements(
+        entries: Iterable[dict[str, Any]],
+    ) -> dict[str, Any]:
+        entries = sorted(entries, key=lambda entry: entry["date"], reverse=True)
+        values: dict[str, dict[str, Any]] = {}
+        for field in BODY_MEASUREMENT_FIELDS:
+            logged = [
+                (entry["date"], entry[field])
+                for entry in entries
+                if isinstance(entry.get(field), int | float)
+            ]
+            if not logged:
+                continue
+            (date, value), previous = logged[0], logged[1] if len(logged) > 1 else None
+            values[field] = {
+                "value": value,
+                "date": date,
+                "previous_value": previous[1] if previous else None,
+                "previous_date": previous[0] if previous else None,
+                "change": round(value - previous[1], 2) if previous else None,
+            }
+        return {
+            "latest_date": entries[0]["date"] if entries else None,
+            "values": values,
+            "history": entries[:BODY_MEASUREMENT_HISTORY],
+        }
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Hevy API.
 
@@ -809,6 +1032,11 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Update PRs from all fetched workouts
             self._update_exercise_prs(self._workout_history)
+
+            try:
+                await self._update_body_measurements()
+            except HevyApiError as err:
+                _LOGGER.warning("Could not fetch Hevy body measurements: %s", err)
 
             # Process data for sensors
             last_workout = workouts[0] if workouts else None
@@ -1134,6 +1362,9 @@ class HevyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "weekly_distance": weekly_distance_data,
                 "workout_dates": workout_dates_sorted,
                 "workout_summaries": workout_summaries,
+                "body_measurements": self._summarize_body_measurements(
+                    self._body_measurements.values()
+                ),
             }
 
         except HevyApiError as err:

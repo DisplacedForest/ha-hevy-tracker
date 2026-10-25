@@ -179,7 +179,7 @@ custom_components/hevy/
 ### API Client (`api.py`)
 - Async HTTP requests with aiohttp
 - Error handling (auth, timeouts, API errors)
-- Endpoints: workouts, events, count, templates, routines
+- Endpoints: workouts, events, count, templates, routines, body measurements
 
 ### Coordinator (`coordinator.py`)
 - Fetches data every N minutes (configurable)
@@ -262,6 +262,14 @@ This supports A-B-C rotation training (e.g., lift, rest, lift, rest, lift).
 - [ ] 30-day pagination stops at date cutoff or page cap
 - [ ] Routine cache populates on startup (check logs)
 - [ ] Graceful degradation if routines fetch fails
+- [ ] Body measurement sensors appear only for fields logged at least once
+- [ ] A body measurement field keeps its last value when a newer entry leaves it empty
+- [ ] Body measurement units follow the unit system (kg / cm or lb / in), including `previous_value` and `change`
+- [ ] Switching the unit system updates existing body measurement sensors after reload, and a unit picked per entity is kept
+- [ ] A field logged only before the newest 50 entries gets its sensor on a fresh setup and keeps its value, `previous_value` and `change`
+- [ ] Deleting the newest body measurement entry updates the sensors on the next update
+- [ ] A history longer than 180 entries is read completely over several updates, and a field logged only before it gets its sensor
+- [ ] A failed or invalid body measurement response keeps the last values and workout sensors still update
 
 ## Release Process
 
