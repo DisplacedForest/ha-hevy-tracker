@@ -7,21 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [1.7.0] - 2026-10-24
 
 Body measurements from Hevy's *Log Measurements* screen as sensors.
+
+### Added
 
 - Add a sensor per logged body measurement (body weight, lean body mass, body fat, neck, shoulder, chest, biceps, forearms, abdomen, waist, hips, thighs, calves) with `measured_on`, `previous_value` and `change` attributes. Sensors appear for fields you have logged at least once.
 - Values are stored in kg / cm and shown in the integration's unit system (lb / in for imperial). Changing that setting updates existing sensors, including `previous_value` and `change`; a unit you pick for a sensor yourself is kept. They have a `state_class`, so long-term statistics work.
 - Add `sensor.hevy_last_body_measurement` with the date of the newest entry and the last 30 entries as a `history` attribute.
-- Measurements you log less often, such as waist, keep their sensor, previous value and change. Every update reads the newest 50 entries, so new, edited and deleted entries among them show up right away. All entries are read at setup and once a day, up to 180 entries per update, so a long history is read completely over a few updates and edited and deleted older entries are picked up.
-- A failed or invalid body measurement response keeps the last known values and never fails the workout update.
+- Measurements you log less often, such as waist, keep their sensor, previous value and change. Every update reads the newest 50 entries, so new, edited and deleted entries among them show up right away. All entries are also read at setup and once a day, in batches of up to 180 older entries alongside the newest 50, so a long history is read completely over a few updates and edited and deleted older entries are picked up.
+- If a body measurement request fails or Hevy returns a malformed page, the last known values are kept and the workout update still runs.
 
 ### Fixed
 
 - Keep timestamp parsing and timeout handling compatible with Ruff 0.17, explicitly targeting the Python 3.12 minimum required by Home Assistant 2024.7.
-
-- Keep validation schema types compatible with Home Assistant 2026.10 while retaining legacy runtime imports. Update the test harness to stable 0.13.371.
+- Keep validation schema types compatible with Home Assistant 2026.10 while retaining legacy runtime imports. Update the test harness to stable 0.13.373.
 
 ## [1.6.0] - 2026-09-30
 
@@ -296,7 +297,8 @@ Requires Home Assistant 2024.7 or later and Hevy Pro. After updating, add `/hevy
 - Configurable update intervals to manage API usage
 
 
-[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/DisplacedForest/ha-hevy-tracker/compare/v1.4.0...v1.5.0
